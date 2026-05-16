@@ -167,7 +167,7 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
 
             phase = 'post_main'
             if current['type']=='up' and cs >= mw_score*0.8: phase = 'main_advance'
-            elif current['type']=='up' and current['amplitude']>=8 and current['slope']>=1.5: phase = 'strong_advance'
+            elif current['type']=='up' and current['amplitude']>=8 and current['slope']>=1.5 and latest_val > 0: phase = 'strong_advance'
             elif current['type']=='down':
                 prev_up = next((w for w in reversed(merged[:-1]) if w['type']=='up'), None)
                 if prev_up and prev_up['amplitude']>=5:
