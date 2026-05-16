@@ -68,6 +68,7 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
             })
         # Compute ETF RS for this sector
         etf_latest_rs = None
+        etf_trajectory = []
         etf_code = INDUSTRY_ETF.get(sector, "")
         if etf_code and etf_code in etf_rs_cache:
             etf_s = etf_rs_cache[etf_code]
@@ -79,6 +80,10 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
                 if len(etf_rs_val) > 0:
                     import numpy as np
                     etf_latest_rs = round(float(etf_rs_val.iloc[-1]), 2)
+                    # Compute ETF trajectory for trend direction
+                    etf_traj, _, _, _ = get_trajectory(etf_rs_val, etf_rs_val, TRAJECTORY_INTERVAL)
+                    if etf_traj:
+                        etf_trajectory = [{"value": [round(p["x"], 2), round(p["y"], 2)], "date": p["date"]} for p in etf_traj]
 
         sectors_data.append({
             "name": sector,
@@ -93,6 +98,7 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
             "quad": get_quad(lx, ly),
             "etfCode": INDUSTRY_ETF.get(sector, ""),
             "etfRS": etf_latest_rs,
+            "etfTrajectory": etf_trajectory,
         })
 
     hist_dates = HISTORICAL_DATES[:]
@@ -426,9 +432,11 @@ function buildTrendTable() {{
     const exp = expandedSectors.has(s.name);
     const cd = consecDir(s.trajectory.map(p => p.value).reverse());
     const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold" title="RS连续上升' + cd + '期">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold" title="RS连续下降' + Math.abs(cd) + '期">↓' + Math.abs(cd) + '</span>' : '';
+    const etfCd = s.etfTrajectory && s.etfTrajectory.length > 1 ? consecDir(s.etfTrajectory.map(p => p.value).reverse()) : 0;
+    const etfCdHtml = etfCd !== 0 ? ' <span style="color:#888;font-size:9px">ETF' + (etfCd > 0 ? '<span style="color:#d32f2f">↑' + etfCd + '</span>' : '<span style="color:#2E7D32">↓' + Math.abs(etfCd) + '</span>') + '</span>' : '';
     const etfHtml = s.etfCode ? '<span style="color:#888;font-size:9px;margin-left:4px">' + s.etfCode + '</span>' : '';
     const etfRsHtml = s.etfRS != null ? '<span style="color:#888;font-size:9px;margin-left:4px">ETF:' + s.etfRS.toFixed(1) + '</span>' : '';
-    html += '<tr><td class="sector-name q-' + s.quad + '"><span class="exp-btn" data-sector="' + s.name.replace(/"/g, '&quot;') + '">' + (exp ? '−' : '+') + '</span><span data-go-stock="' + s.name.replace(/"/g, '&quot;') + '" style="cursor:pointer">' + s.name + '</span> ' + cdHtml + etfHtml + etfRsHtml + '</td>';
+    html += '<tr><td class="sector-name q-' + s.quad + '"><span class="exp-btn" data-sector="' + s.name.replace(/"/g, '&quot;') + '">' + (exp ? '−' : '+') + '</span><span data-go-stock="' + s.name.replace(/"/g, '&quot;') + '" style="cursor:pointer">' + s.name + '</span> ' + cdHtml + etfCdHtml + etfHtml + etfRsHtml + '</td>';
     dates.forEach((d, di) => {{
       const v = map[d];
       if (!v) {{ html += '<td>-</td>'; return; }}
@@ -550,7 +558,9 @@ function buildStockTrendTable() {{
     const emUrl = 'https://quote.eastmoney.com/' + ex + code + '.html';
     const cd = consecDir(st.trajectory.map(p => p.value).reverse());
     const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold" title="RS连续上升' + cd + '期">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold" title="RS连续下降' + Math.abs(cd) + '期">↓' + Math.abs(cd) + '</span>' : '';
-    html += '<tr class="st-row-q-' + st.quad + '"><td class="st-name q-' + st.quad + '"><a href="' + emUrl + '" target="_blank" style="text-decoration:none;color:inherit">' + st.name + ' <span class="st-code">' + code + '</span></a> ' + cdHtml + '</td><td style="font-size:9px;color:#888">' + st.sector + '</td>';
+    const sec = sectorsData.find(sd => sd.name === st.sector);
+    const etfTag = sec && sec.etfCode ? '<span style="color:#E65100;font-size:9px;margin-left:4px">' + sec.etfCode + '</span>' : '';
+    html += '<tr class="st-row-q-' + st.quad + '"><td class="st-name q-' + st.quad + '"><a href="' + emUrl + '" target="_blank" style="text-decoration:none;color:inherit">' + st.name + ' <span class="st-code">' + code + '</span></a> ' + cdHtml + '</td><td style="font-size:9px;color:#888">' + st.sector + etfTag + '</td>';
     dates.forEach((d, di) => {{
       const v = map[d];
       if (!v) {{ html += '<td>-</td>'; return; }}
