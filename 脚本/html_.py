@@ -226,7 +226,16 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
   </div>
   <div class="snap-bar">
     <span style="font-size:11px;color:#888">⏱ 快照</span>
+    <button class="snap-btn" onclick="snapStep(-1)" title="后退">◀</button>
     <input type="range" id="snapSlider" min="0" max="0" value="0" step="1" oninput="onSnapPreview(this)" onchange="onSnapCommit(this)">
+    <button class="snap-btn" onclick="snapStep(1)" title="前进">▶</button>
+    <button class="snap-btn" id="snapPlayBtn" onclick="snapAutoPlay()" title="自动播放">▶</button>
+    <select id="snapSpeed" onchange="updateSnapSpeed()" style="font-size:10px;padding:1px 2px;border:1px solid #ddd;border-radius:3px">
+      <option value="200">0.2s</option>
+      <option value="500" selected>0.5s</option>
+      <option value="1000">1s</option>
+      <option value="2000">2s</option>
+    </select>
     <span class="snap-date" id="snapDateLabel">关闭</span>
     <label><input type="checkbox" id="compareCheck" onchange="onCompareToggle()"> 对比当前</label>
     <button class="snap-btn" onclick="clearSnapshot()">✕ 重置</button>
@@ -888,7 +897,44 @@ function zoomChart(factor) {{
 
 // snapshot
 let snapPending = null;
+let snapAutoTimer = null;
+function stopAutoPlay() {{
+  if (snapAutoTimer) {{
+    clearInterval(snapAutoTimer);
+    snapAutoTimer = null;
+    var btn = document.getElementById('snapPlayBtn');
+    if (btn) {{ btn.textContent = '▶'; btn.style.background = '#1a1a2e'; }}
+  }}
+}}
+function snapAutoPlay() {{
+  if (snapAutoTimer) {{
+    clearInterval(snapAutoTimer);
+    snapAutoTimer = null;
+    document.getElementById('snapPlayBtn').textContent = '▶';
+    document.getElementById('snapPlayBtn').style.background = '#1a1a2e';
+    return;
+  }}
+  document.getElementById('snapPlayBtn').textContent = '⏸';
+  document.getElementById('snapPlayBtn').style.background = '#e94560';
+  var speed = parseInt(document.getElementById('snapSpeed').value);
+  snapAutoTimer = setInterval(function() {{
+    var el = document.getElementById('snapSlider');
+    var next = parseInt(el.value) + 1;
+    if (next > parseInt(el.max)) next = 1;
+    el.value = next;
+    onSnapCommit(el);
+  }}, speed);
+}}
+function snapStep(delta) {{
+  stopAutoPlay();
+  var el = document.getElementById('snapSlider');
+  var val = parseInt(el.value) + delta;
+  val = Math.max(0, Math.min(val, parseInt(el.max)));
+  el.value = val;
+  onSnapCommit(el);
+}}
 function onSnapPreview(el) {{
+  stopAutoPlay();
   const idx = parseInt(el.value);
   const d = idx === 0 ? null : snapshotDates[idx];
   const label = document.getElementById('snapDateLabel');
@@ -912,6 +958,7 @@ function onCompareToggle() {{
   if (snapshotDate) chart.setOption(buildOption(showLines, isolatedSector, snapshotDate), true);
 }}
 function clearSnapshot() {{
+  stopAutoPlay();
   snapshotDate = null;
   compareMode = false;
   document.getElementById('snapSlider').value = 0;
