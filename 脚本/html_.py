@@ -216,8 +216,7 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
 const sectorsData = {sectors_json};
 const histSeries = {hist_series_json};
 const HIST_DATES = {hist_dates_json};
-let stockTrajData = null;
-const STOCK_TRAJ_URL = 'stock_traj_data.json';
+let stockTrajData = {stock_traj_json};
 const snapshotDates = {snapshot_dates_json};
 
 const quads = {{'L':'Leading','I':'Improving','W':'Weakening','G':'Lagging'}};
@@ -330,19 +329,7 @@ function buildTrendTable() {{
   document.getElementById('trendWrap').innerHTML = html;
 }}
 
-function ensureStockData(cb) {{
-  if (stockTrajData) {{ cb(); return; }}
-  document.getElementById('stockTrendWrap').innerHTML = '<div style="padding:20px;text-align:center;color:#888;font-size:13px">加载个股数据中...</div>';
-  fetch(STOCK_TRAJ_URL).then(r => r.json()).then(data => {{
-    stockTrajData = data;
-    cb();
-  }}).catch(() => {{
-    document.getElementById('stockTrendWrap').innerHTML = '<div style="padding:20px;text-align:center;color:#d32f2f;font-size:13px">个股数据加载失败</div>';
-  }});
-}}
-
 function buildStockTrendTable() {{
-  ensureStockData(function() {{
   const search = (document.getElementById('stockSearch').value || '').trim().toLowerCase();
   const entries = Object.entries(stockTrajData);
 
@@ -419,7 +406,6 @@ function buildStockTrendTable() {{
   }});
   html += '</tbody></table>';
   document.getElementById('stockTrendWrap').innerHTML = html;
-  }});
 }}
 
 function switchTab(tab) {{
@@ -763,6 +749,4 @@ window.addEventListener('resize', () => chart.resize());
 </html>"""
     out_path = DATA_DIR / "行业轮动RRS轨迹图.html"
     out_path.write_text(html, encoding="utf-8")
-    traj_path = DATA_DIR / "stock_traj_data.json"
-    traj_path.write_text(stock_traj_json, encoding="utf-8")
     print(f"  HTML: {out_path}", file=sys.stderr)
