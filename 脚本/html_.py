@@ -366,7 +366,8 @@ function buildTrendTable() {{
   html += '<span style="margin-right:10px"><span class="color-sq" style="background:#2E7D32"></span><b style="color:#2E7D32">I</b> Improving</span>';
   html += '<span style="margin-right:10px"><span class="color-sq" style="background:#E65100"></span><b style="color:#E65100">W</b> Weakening</span>';
   html += '<span><span class="color-sq" style="background:#999"></span><b style="color:#999">G</b> Lagging</span>';
-  html += '<span style="margin-left:12px;color:#aaa;font-size:9px">↑N/↓N = RS连升/连降N期</span>';
+  html += '<span style="margin-left:12px;color:#aaa;font-size:9px">↑N/↓N = RS连升/连降N期 | 格中↑↓为RS变化 | ↑+L/I=趋势加速 ↓+L/W=减速预警</span>';
+  html += '<div style="font-size:9px;color:#bbb;margin-top:2px">RS↑+MO↑=走强加速  RS↑+MO↓=走强减速  RS↓+MO↑=走弱逆转  RS↓+MO↓=双降恶化</div>';
   html += '</div>';
   html += '<table><thead><tr><th class="sector-name">行业</th>';
   dates.forEach((d, di) => {{
@@ -477,7 +478,8 @@ function buildStockTrendTable() {{
     const arrow = active ? (stockTrendSortDir > 0 ? '▲' : '▼') : '';
     html += '<span data-stock-sort="' + k + '" style="cursor:pointer;padding:1px 6px;border-radius:3px;background:' + (active ? '#1a1a2e' : '#e0e0e0') + ';color:' + (active ? '#fff' : '#333') + '">' + label + ' ' + arrow + '</span>';
   }});
-  html += '<span style="margin-left:12px;color:#aaa;font-size:9px">↑N/↓N = RS连升/连降N期 | 格中↑↓为RS较上期变化</span>';
+  html += '<span style="margin-left:12px;color:#aaa;font-size:9px">↑N/↓N = RS连升/连降N期 | 格中↑↓为RS变化方向 | ↑+L/I=加速 ↓+L/W=减速预警</span>';
+  html += '<div style="font-size:9px;color:#bbb;margin-top:2px">RS↑+MO↑=走强加速  RS↑+MO↓=走强减速  RS↓+MO↑=走弱逆转  RS↓+MO↓=双降恶化</div>';
   html += '</div>';
   html += '<table><thead><tr><th class="st-name" style="min-width:60px">名称 <span style="font-weight:400;font-size:9px;color:#999">代码</span></th><th style="min-width:40px">行业</th>';
 
