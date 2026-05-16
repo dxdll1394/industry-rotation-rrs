@@ -335,8 +335,8 @@ function buildTrendTable() {{
     sorted.sort((a, b) => ((qOrd[a.quad]||9) - (qOrd[b.quad]||9)) * trendSortDir || a.name.localeCompare(b.name));
   }} else if (trendSortMode === 'trend') {{
     sorted.sort((a, b) => {{
-      const da = a.trajectory.map(p => p.value);
-      const db = b.trajectory.map(p => p.value);
+      const da = a.trajectory.map(p => p.value).reverse();
+      const db = b.trajectory.map(p => p.value).reverse();
       return (consecDir(da) - consecDir(db)) * trendSortDir;
     }});
   }} else if (trendSortMode === 'count') {{
@@ -380,7 +380,7 @@ function buildTrendTable() {{
     const map = {{}};
     s.trajectory.forEach(p => map[p.date] = p.value);
     const exp = expandedSectors.has(s.name);
-    const cd = consecDir(s.trajectory.map(p => p.value));
+    const cd = consecDir(s.trajectory.map(p => p.value).reverse());
     const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold" title="RS连续上升' + cd + '期">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold" title="RS连续下降' + Math.abs(cd) + '期">↓' + Math.abs(cd) + '</span>' : '';
     html += '<tr><td class="sector-name q-' + s.quad + '"><span class="exp-btn" data-sector="' + s.name.replace(/"/g, '&quot;') + '">' + (exp ? '−' : '+') + '</span><span data-go-stock="' + s.name.replace(/"/g, '&quot;') + '" style="cursor:pointer">' + s.name + '</span> ' + cdHtml + '</td>';
     dates.forEach((d, di) => {{
@@ -496,7 +496,7 @@ function buildStockTrendTable() {{
     st.trajectory.forEach(p => map[p.date] = p.value);
     const ex = code.startsWith('6') ? 'sh' : (code.startsWith('8') || code.startsWith('4') ? 'bj' : 'sz');
     const emUrl = 'https://quote.eastmoney.com/' + ex + code + '.html';
-    const cd = consecDir(st.trajectory.map(p => p.value));
+    const cd = consecDir(st.trajectory.map(p => p.value).reverse());
     const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold" title="RS连续上升' + cd + '期">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold" title="RS连续下降' + Math.abs(cd) + '期">↓' + Math.abs(cd) + '</span>' : '';
     html += '<tr class="st-row-q-' + st.quad + '"><td class="st-name q-' + st.quad + '"><a href="' + emUrl + '" target="_blank" style="text-decoration:none;color:inherit">' + st.name + ' <span class="st-code">' + code + '</span></a> ' + cdHtml + '</td><td style="font-size:9px;color:#888">' + st.sector + '</td>';
     dates.forEach((d, di) => {{
