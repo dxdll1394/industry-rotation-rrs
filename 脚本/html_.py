@@ -265,7 +265,7 @@ function buildTrendTable() {{
     }});
     html += '</tr>';
     if (exp && s.stockList) {{
-      html += '<tr class="stock-row"><td colspan="' + nCols + '"><div style="display:flex;flex-wrap:wrap;gap:2px 0">';
+      html += '<tr class="stock-row"><td colspan="' + nCols + '"><div style="display:flex;flex-direction:column;gap:2px">';
       s.stockList.forEach(st => {{
         const qc = {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}};
         const ex = st.code.startsWith('6') ? 'sh' : (st.code.startsWith('8') || st.code.startsWith('4') ? 'bj' : 'sz');
