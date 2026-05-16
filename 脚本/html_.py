@@ -101,6 +101,86 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
             "etfTrajectory": etf_trajectory,
         })
 
+    # Wave analysis data (main advance detection)
+    wave_data = {}
+    for sector, st in trajectories.items():
+        try:
+            import numpy as np
+            rr_series = st["rs_ratio"]
+            if rr_series is None or len(rr_series) < 200: continue
+            traj, _, _, _ = get_trajectory(rr_series, rr_series, 5)
+            if not traj or len(traj) < 30: continue
+            vals = [p["x"] for p in traj]
+
+            # Segment trends
+            segs = []; i = 0
+            while i < len(vals) - 1:
+                d = 1 if vals[i+1]>vals[i] else -1 if vals[i+1]<vals[i] else 0
+                if d == 0: i += 1; continue
+                start = i
+                while i < len(vals) - 1:
+                    diff = vals[i+1]-vals[i]; dd = 1 if diff>0 else -1 if diff<0 else 0
+                    if dd == d: i += 1
+                    else: break
+                end = i; periods = end - start
+                if periods >= 2:
+                    segs.append({'type':'up' if vals[end]>vals[start] else 'down','start':start,'end':end,
+                        'amplitude':round(abs(vals[end]-vals[start]),1),'periods':periods,'days':periods*5,
+                        'slope':round((vals[end]-vals[start])/periods,2)})
+                i = end
+
+            if len(segs) < 3: continue
+            # Merge small waves
+            merged = [segs[0]]
+            for j in range(1, len(segs)-1):
+                pa = merged[-1]['amplitude']; ca = segs[j]['amplitude']; na = segs[j+1]['amplitude']
+                if ca < 0.33 * max(pa, na) and merged[-1]['type'] == segs[j+1]['type']:
+                    prev = merged[-1]; prev['end'] = segs[j+1]['end']
+                    prev['amplitude'] = round(abs(vals[prev['end']]-vals[prev['start']]),1)
+                    prev['periods'] = prev['end']-prev['start']; prev['days'] = prev['periods']*5
+                    if prev['periods']>0: prev['slope'] = round((vals[prev['end']]-vals[prev['start']])/prev['periods'],2)
+                else:
+                    merged.append(segs[j])
+            if merged and merged[-1]['end'] < segs[-1]['end']: merged.append(segs[-1])
+
+            up_waves = [w for w in merged if w['type']=='up' and w['amplitude']>=5]
+            if not up_waves: continue
+            scored = [(w['amplitude']*np.sqrt(w['days']), w) for w in up_waves]
+            scored.sort(key=lambda x:-x[0])
+            main_wave = scored[0][1]
+            mw_score = main_wave['amplitude']*np.sqrt(main_wave['days'])
+
+            current = merged[-1]
+            cs = current['amplitude']*np.sqrt(current['days']) if current['type']=='up' else 0
+            latest_val = vals[-1]
+
+            phase = 'post_main'
+            if current['type']=='up' and cs >= mw_score*0.8: phase = 'main_advance'
+            elif current['type']=='up' and current['amplitude']>=8 and current['slope']>=1.5: phase = 'strong_advance'
+            elif current['type']=='down':
+                prev_up = next((w for w in reversed(merged[:-1]) if w['type']=='up'), None)
+                if prev_up and prev_up['amplitude']>=5 and latest_val>prev_up['start_val']-2: phase = 'pre_main'
+            mi = merged.index(main_wave); ci = merged.index(current)
+            if ci>mi+2 and current['type']=='up' and current['amplitude']<main_wave['amplitude']*0.6: phase = 'terminal'
+            if latest_val<0 and current['type']=='up' and current['amplitude']<8: phase = 'recovery'
+
+            wave_data[sector] = {
+                'phase': phase,
+                'current_type': current['type'],
+                'current_amp': current['amplitude'],
+                'current_days': current['days'],
+                'current_slope': current['slope'],
+                'main_amp': main_wave['amplitude'],
+                'main_days': main_wave['days'],
+                'main_slope': main_wave['slope'],
+                'main_score': round(mw_score, 0),
+                'latest_rs': round(latest_val, 1),
+                'n_waves': len(merged),
+                'rs_range': f"{round(min(vals),0)}~{round(max(vals),0)}",
+            }
+        except Exception:
+            pass
+
     hist_dates = HISTORICAL_DATES[:]
     hist_series_list = []
     for d in hist_dates:
@@ -120,6 +200,7 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
     stock_traj_json = json.dumps(stock_traj or {}, ensure_ascii=False)
     snapshot_dates = sorted(set(p["date"] for sd in sectors_data for p in sd["trajectory"]))
     snapshot_dates_json = json.dumps(snapshot_dates, ensure_ascii=False)
+    wave_data_json = json.dumps(wave_data, ensure_ascii=False)
 
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -285,6 +366,7 @@ const histSeries = {hist_series_json};
 const HIST_DATES = {hist_dates_json};
 let stockTrajData = {stock_traj_json};
 const snapshotDates = {snapshot_dates_json};
+const waveData = {wave_data_json};
 
 const quads = {{'L':'Leading','I':'Improving','W':'Weakening','G':'Lagging'}};
 
@@ -684,6 +766,33 @@ function buildAnalysisReport() {{
     }});
     html += '</table>';
   }});
+
+  // Wave analysis section
+  html += '<h3 style=\"font-size:14px;margin:20px 0 6px\">🌊 主升浪分析（振幅×√天数评分）</h3>';
+  html += '<table style=\"width:100%;font-size:11px\"><tr style=\"background:#f8f9fa\"><th>行业</th><th>RS</th><th>波浪位置</th><th>当前浪</th><th>主升浪</th><th>评分</th><th>解读</th></tr>';
+  var phaseOrder = {{main_advance:0, strong_advance:1, pre_main:2, recovery:3, terminal:4, post_main:5, no_main:9}};
+  var phaseIcons = {{main_advance:'★★★', strong_advance:'★★', pre_main:'📍', recovery:'▲', terminal:'▼', post_main:'—', no_main:'?'}};
+  var phaseLabels = {{main_advance:'主升浪中', strong_advance:'强势推进', pre_main:'主升前布局', recovery:'弱势反弹', terminal:'末浪衰竭', post_main:'主升已过', no_main:'无主升'}};
+  var sectors = Object.keys(waveData);
+  sectors.sort(function(a,b){{ return (phaseOrder[waveData[a].phase]||9) - (phaseOrder[waveData[b].phase]||9) || waveData[b].latest_rs - waveData[a].latest_rs; }});
+  sectors.forEach(function(sec) {{
+    var w = waveData[sec];
+    var icon = phaseIcons[w.phase] || '—';
+    var label = phaseLabels[w.phase] || w.phase;
+    var curDir = w.current_type === 'up' ? '↑' : '↓';
+    var rowColor = '';
+    if (w.phase === 'main_advance' || w.phase === 'strong_advance') rowColor = 'background:#E8F5E9';
+    else if (w.phase === 'pre_main') rowColor = 'background:#FFF8E1';
+    else if (w.phase === 'terminal') rowColor = 'background:#FFEBEE';
+    var desc = '';
+    if (w.phase === 'main_advance') desc = '最强上升中，持有';
+    else if (w.phase === 'strong_advance') desc = '强势，距主升还差' + Math.round((1 - w.current_amp/Math.max(w.main_amp,1))*100) + '%';
+    else if (w.phase === 'pre_main') desc = 'abc调整，突破可进主升';
+    else if (w.phase === 'terminal') desc = '力度递减，减仓';
+    else desc = '等下一轮结构';
+    html += '<tr style=\"' + rowColor + '\"><td>' + icon + ' ' + sec + '</td><td>' + w.latest_rs.toFixed(0) + '</td><td style=\"font-weight:bold\">' + label + '</td><td>' + curDir + w.current_amp.toFixed(0) + '/' + w.current_days + '天</td><td>↑' + w.main_amp.toFixed(0) + '/' + w.main_days + '天</td><td>' + w.main_score.toFixed(0) + '</td><td style=\"font-size:10px;color:#666\">' + desc + '</td></tr>';
+  }});
+  html += '</table>';
 
   // Window candidates
   html += '<h3 style=\"font-size:14px;margin:20px 0 6px\">🎯 逆转窗口候选（连降10~25日，等MO转正）</h3>';
