@@ -285,6 +285,21 @@ document.getElementById('trendWrap').addEventListener('click', function(e) {{
 const QC = {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}};
 const QN = {{L:'Leading',I:'Improving',W:'Weakening',G:'Lagging'}};
 
+function consecDir(vals) {{
+  // vals = [[x,y], ...] ordered latest-first
+  if (vals.length < 2) return 0;
+  const diff = vals[0][0] - vals[1][0];
+  let dir = diff > 0 ? 1 : diff < 0 ? -1 : 0;
+  if (dir === 0) return 0;
+  let n = 1;
+  for (let i = 1; i < vals.length - 1; i++) {{
+    const d = vals[i][0] - vals[i+1][0];
+    if ((d > 0 && dir > 0) || (d < 0 && dir < 0)) n++;
+    else break;
+  }}
+  return dir * n;
+}}
+
 function setTrendSort(mode) {{
   if (trendSortMode === mode) {{ trendSortDir *= -1; }}
   else {{ trendSortMode = mode; trendSortDir = 1; trendSortCol = -1; }}
@@ -304,6 +319,12 @@ function buildTrendTable() {{
     sorted.sort((a, b) => (a.latest[1] - b.latest[1]) * trendSortDir);
   }} else if (trendSortMode === 'quad') {{
     sorted.sort((a, b) => ((qOrd[a.quad]||9) - (qOrd[b.quad]||9)) * trendSortDir || a.name.localeCompare(b.name));
+  }} else if (trendSortMode === 'trend') {{
+    sorted.sort((a, b) => {{
+      const da = a.trajectory.map(p => p.value);
+      const db = b.trajectory.map(p => p.value);
+      return (consecDir(da) - consecDir(db)) * trendSortDir;
+    }});
   }} else if (trendSortMode === 'count') {{
     sorted.sort((a, b) => (a.stockCount - b.stockCount) * trendSortDir);
   }} else if (trendSortMode === 'date' && trendSortCol >= 0) {{
@@ -320,7 +341,7 @@ function buildTrendTable() {{
   const nCols = dates.length + 1;
   let html = '<div style="margin-bottom:6px;font-size:10px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">';
   html += '<span style="color:#888;margin-right:4px">排序:</span>';
-  const sorts = [['name','名称'],['rs','最新RS'],['mo','最新MO'],['quad','象限'],['count','数量']];
+  const sorts = [['name','名称'],['rs','最新RS'],['mo','最新MO'],['trend','RS趋势'],['quad','象限'],['count','数量']];
   sorts.forEach(([k, label]) => {{
     const active = trendSortMode === k;
     const arrow = active ? (trendSortDir > 0 ? '▲' : '▼') : '';
@@ -343,7 +364,9 @@ function buildTrendTable() {{
     const map = {{}};
     s.trajectory.forEach(p => map[p.date] = p.value);
     const exp = expandedSectors.has(s.name);
-    html += '<tr><td class="sector-name q-' + s.quad + '"><span class="exp-btn" data-sector="' + s.name.replace(/"/g, '&quot;') + '">' + (exp ? '−' : '+') + '</span>' + s.name + '</td>';
+    const cd = consecDir(s.trajectory.map(p => p.value));
+    const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold">↓' + Math.abs(cd) + '</span>' : '';
+    html += '<tr><td class="sector-name q-' + s.quad + '"><span class="exp-btn" data-sector="' + s.name.replace(/"/g, '&quot;') + '">' + (exp ? '−' : '+') + '</span>' + s.name + ' ' + cdHtml + '</td>';
     dates.forEach((d, di) => {{
       const v = map[d];
       if (!v) {{ html += '<td>-</td>'; return; }}
@@ -408,6 +431,12 @@ function buildStockTrendTable() {{
     filtered.sort((a, b) => (a[1].latest[1] - b[1].latest[1]) * stockTrendSortDir);
   }} else if (stockTrendSortMode === 'quad') {{
     filtered.sort((a, b) => ((qOrd[a[1].quad]||9) - (qOrd[b[1].quad]||9)) * stockTrendSortDir || a[1].name.localeCompare(b[1].name));
+  }} else if (stockTrendSortMode === 'trend') {{
+    filtered.sort((a, b) => {{
+      const da = a[1].trajectory.map(p => p.value);
+      const db = b[1].trajectory.map(p => p.value);
+      return (consecDir(da) - consecDir(db)) * stockTrendSortDir;
+    }});
   }} else if (stockTrendSortMode === 'date' && stockTrendSortCol >= 0) {{
     const col = stockTrendSortCol;
     filtered.sort((a, b) => {{
@@ -426,7 +455,7 @@ function buildStockTrendTable() {{
   let html = '';
   html += '<div style="margin-bottom:4px;font-size:10px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">';
   html += '<span style="color:#888;margin-right:4px">排序:</span>';
-  const sorts = [['name','名称'],['code','代码'],['sector','行业'],['rs','最新RS'],['mo','最新MO'],['quad','象限']];
+  const sorts = [['name','名称'],['code','代码'],['sector','行业'],['rs','最新RS'],['mo','最新MO'],['trend','RS趋势'],['quad','象限']];
   sorts.forEach(([k, label]) => {{
     const active = stockTrendSortMode === k;
     const arrow = active ? (stockTrendSortDir > 0 ? '▲' : '▼') : '';
@@ -448,7 +477,9 @@ function buildStockTrendTable() {{
     st.trajectory.forEach(p => map[p.date] = p.value);
     const ex = code.startsWith('6') ? 'sh' : (code.startsWith('8') || code.startsWith('4') ? 'bj' : 'sz');
     const emUrl = 'https://quote.eastmoney.com/' + ex + code + '.html';
-    html += '<tr class="st-row-q-' + st.quad + '"><td class="st-name q-' + st.quad + '"><a href="' + emUrl + '" target="_blank" style="text-decoration:none;color:inherit">' + st.name + ' <span class="st-code">' + code + '</span></a></td><td style="font-size:9px;color:#888">' + st.sector + '</td>';
+    const cd = consecDir(st.trajectory.map(p => p.value));
+    const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold">↓' + Math.abs(cd) + '</span>' : '';
+    html += '<tr class="st-row-q-' + st.quad + '"><td class="st-name q-' + st.quad + '"><a href="' + emUrl + '" target="_blank" style="text-decoration:none;color:inherit">' + st.name + ' <span class="st-code">' + code + '</span></a> ' + cdHtml + '</td><td style="font-size:9px;color:#888">' + st.sector + '</td>';
     dates.forEach((d, di) => {{
       const v = map[d];
       if (!v) {{ html += '<td>-</td>'; return; }}
