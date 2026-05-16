@@ -6,6 +6,34 @@ from calc import get_trajectory, get_quad
 
 def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=None):
     stock_rs = stock_rs or {}
+    
+    # Load ETF data
+    import pandas as pd, numpy as np
+    from pathlib import Path
+    INDUSTRY_ETF = {
+        "交通运输": "159729", "传媒": "512980", "光伏电池": "515790",
+        "军工": "512660", "农牧": "159616", "化工": "516020",
+        "医药生物": "512010", "半导体": "512480", "家电": "159996",
+        "建材": "159745", "房地产": "512200", "有色金属": "512400",
+        "煤炭": "515220", "环保": "512580", "电力": "159611",
+        "电子": "159997", "通信": "515880", "计算机": "512720",
+        "金融": "510230", "钢铁": "515210", "锂电": "561160",
+        "食品饮料": "515170", "建筑": "516950", "汽车": "516110",
+    }
+    etf_rs_cache = {}
+    for sector, code in INDUSTRY_ETF.items():
+        cache_file = DATA_DIR / "收盘价缓存" / f"etf_{code}.parquet"
+        if cache_file.exists():
+            import pandas as pd
+            df = pd.read_parquet(cache_file)
+            if "close" in df.columns:
+                s = df["close"].dropna().copy()
+                s.index = pd.to_datetime(s.index)
+                etf_rs_cache[code] = s
+    
+    from data import load_market_data
+    etf_market = load_market_data()
+    
     sectors_data = []
     ci = 0
     actual_latest_date = None
@@ -38,6 +66,20 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
                 "rs_momentum": sr.get("rs_momentum"),
                 "quad": sr.get("quad"),
             })
+        # Compute ETF RS for this sector
+        etf_latest_rs = None
+        etf_code = INDUSTRY_ETF.get(sector, "")
+        if etf_code and etf_code in etf_rs_cache:
+            etf_s = etf_rs_cache[etf_code]
+            common = etf_s.index.intersection(etf_market.index)
+            if len(common) > 200:
+                etf_rel = etf_s[common] / etf_market[common]
+                rr = etf_rel.rolling(window=63).mean()
+                etf_rs_val = ((etf_rel / rr - 1) * 100).dropna()
+                if len(etf_rs_val) > 0:
+                    import numpy as np
+                    etf_latest_rs = round(float(etf_rs_val.iloc[-1]), 2)
+
         sectors_data.append({
             "name": sector,
             "color": color,
@@ -49,6 +91,8 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
             "latestDate": actual_latest_date[5:] if actual_latest_date else "",
             "histMap": hist_map,
             "quad": get_quad(lx, ly),
+            "etfCode": INDUSTRY_ETF.get(sector, ""),
+            "etfRS": etf_latest_rs,
         })
 
     hist_dates = HISTORICAL_DATES[:]
@@ -369,7 +413,7 @@ function buildTrendTable() {{
   html += '<span style="margin-left:12px;color:#aaa;font-size:9px">↑N/↓N = RS连升/连降N期 | 格中↑↓为RS变化 | ↑+L/I=趋势加速 ↓+L/W=减速预警</span>';
   html += '<div style="font-size:9px;color:#bbb;margin-top:2px">RS↑+MO↑=走强加速  RS↑+MO↓=走强减速  RS↓+MO↑=走弱逆转  RS↓+MO↓=双降恶化</div>';
   html += '</div>';
-  html += '<table><thead><tr><th class="sector-name">行业</th>';
+  html += '<table><thead><tr><th class="sector-name">行业 <span style="font-weight:400;font-size:9px;color:#999">ETF</span></th>';
   dates.forEach((d, di) => {{
     const active = di === trendSortCol && trendSortMode === 'date';
     const arrow = active ? (trendSortDir > 0 ? ' ▲' : ' ▼') : '';
@@ -382,7 +426,9 @@ function buildTrendTable() {{
     const exp = expandedSectors.has(s.name);
     const cd = consecDir(s.trajectory.map(p => p.value).reverse());
     const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold" title="RS连续上升' + cd + '期">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold" title="RS连续下降' + Math.abs(cd) + '期">↓' + Math.abs(cd) + '</span>' : '';
-    html += '<tr><td class="sector-name q-' + s.quad + '"><span class="exp-btn" data-sector="' + s.name.replace(/"/g, '&quot;') + '">' + (exp ? '−' : '+') + '</span><span data-go-stock="' + s.name.replace(/"/g, '&quot;') + '" style="cursor:pointer">' + s.name + '</span> ' + cdHtml + '</td>';
+    const etfHtml = s.etfCode ? '<span style="color:#888;font-size:9px;margin-left:4px">' + s.etfCode + '</span>' : '';
+    const etfRsHtml = s.etfRS != null ? '<span style="color:#888;font-size:9px;margin-left:4px">ETF:' + s.etfRS.toFixed(1) + '</span>' : '';
+    html += '<tr><td class="sector-name q-' + s.quad + '"><span class="exp-btn" data-sector="' + s.name.replace(/"/g, '&quot;') + '">' + (exp ? '−' : '+') + '</span><span data-go-stock="' + s.name.replace(/"/g, '&quot;') + '" style="cursor:pointer">' + s.name + '</span> ' + cdHtml + etfHtml + etfRsHtml + '</td>';
     dates.forEach((d, di) => {{
       const v = map[d];
       if (!v) {{ html += '<td>-</td>'; return; }}
@@ -401,6 +447,11 @@ function buildTrendTable() {{
     html += '</tr>';
     if (exp && s.stockList) {{
       html += '<tr class="stock-row"><td colspan="' + nCols + '"><div style="display:flex;flex-direction:column;gap:2px">';
+      if (s.etfCode) {{
+        const ex = s.etfCode.startsWith('6') ? 'sh' : (s.etfCode.startsWith('8') || s.etfCode.startsWith('4') ? 'bj' : 'sz');
+        const url = 'https://quote.eastmoney.com/' + ex + s.etfCode + '.html';
+        html += '<div><a href="' + url + '" target="_blank" style="color:#E65100;text-decoration:none;font-size:11px">📦 ' + s.etfCode + ' ETF.' + s.name + (s.etfRS != null ? ' RS=' + s.etfRS.toFixed(1) : '') + '</a></div>';
+      }}
       s.stockList.forEach(st => {{
         const qc = {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}};
         const ex = st.code.startsWith('6') ? 'sh' : (st.code.startsWith('8') || st.code.startsWith('4') ? 'bj' : 'sz');
@@ -659,7 +710,7 @@ function buildOption(showLines, filterSector, snapDate) {{
       if (snap) {{ lx = snap[0]; ly = snap[1]; ld = snapDate.slice(5); }}
     }}
     pts.push({{
-      name: s.name, value: [lx, ly, s.stockCount],
+      name: s.name, value: [lx, ly, s.stockCount], etfCode: s.etfCode, etfRS: s.etfRS,
       symbol: 'circle', symbolSize: 14,
       label: {{ show: true, formatter: s.name + ' (' + ld + ')', fontSize: 11, fontWeight: 'bold', position: 'right' }},
       itemStyle: {{ color: s.color, opacity: 0.9, borderColor: '#fff', borderWidth: 1.5 }},
@@ -690,8 +741,9 @@ function buildOption(showLines, filterSector, snapDate) {{
         const q = getQuad(x, y);
         const name = p.name || p.seriesName || '';
         const suffix = extra != null && typeof extra === 'number' ? ` | 成分股: ${{extra}}只` : '';
+        const etf = p.data.etfCode ? ` | ETF(${{p.data.etfCode}}): ${{p.data.etfRS.toFixed(1)}}` : '';
         const tag = hasSnap ? ` 📷${{snapDate.slice(5)}}` : '';
-        return `<strong>${{name}}</strong><br/>RS: ${{x.toFixed(1)}} | MO: ${{y.toFixed(1)}}<br/>象限: ${{quads[q]}}${{suffix}}${{tag}}`;
+        return `<strong>${{name}}</strong><br/>RS: ${{x.toFixed(1)}} | MO: ${{y.toFixed(1)}}<br/>象限: ${{quads[q]}}${{suffix}}${{tag}}${{etf}}`;
       }}
     }},
     legend: {{
