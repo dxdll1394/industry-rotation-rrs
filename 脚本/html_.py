@@ -265,15 +265,15 @@ function buildTrendTable() {{
     }});
     html += '</tr>';
     if (exp && s.stockList) {{
-      html += '<tr class="stock-row"><td colspan="' + nCols + '">';
+      html += '<tr class="stock-row"><td colspan="' + nCols + '"><div style="display:flex;flex-wrap:wrap;gap:2px 0">';
       s.stockList.forEach(st => {{
         const qc = {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}};
         const ex = st.code.startsWith('6') ? 'sh' : (st.code.startsWith('8') || st.code.startsWith('4') ? 'bj' : 'sz');
         const url = 'https://quote.eastmoney.com/' + ex + st.code + '.html';
         const rs = st.rs_ratio != null ? '<span class="s-rs" style="color:' + qc[st.quad] + '">RS ' + st.rs_ratio.toFixed(1) + ' / MO ' + st.rs_momentum.toFixed(1) + '</span>' : '';
-        html += '<a href="' + url + '" target="_blank" style="text-decoration:none"><span class="s-code">' + st.code + '</span> <span class="s-name">' + st.name + '</span></a>' + rs + ' &nbsp; ';
+        html += '<div><a href="' + url + '" target="_blank" style="text-decoration:none"><span class="s-code">' + st.code + '</span> <span class="s-name">' + st.name + '</span></a>' + rs + '</div> ';
       }});
-      html += '</td></tr>';
+      html += '</div></td></tr>';
     }}
   }});
   html += '</tbody></table>';
