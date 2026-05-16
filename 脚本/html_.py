@@ -172,7 +172,9 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
                 prev_up = next((w for w in reversed(merged[:-1]) if w['type']=='up'), None)
                 if prev_up and prev_up['amplitude']>=5:
                     retrace = (vals[prev_up['end']] - latest_val) / prev_up['amplitude']
-                    if 0.3 <= retrace <= 0.7 and latest_val > vals[prev_up['start']] - 2:
+                    # pre_main 额外条件: 前升浪终点至少达到主升浪峰值的50%
+                    mw_peak = max(vals[main_wave['start']:main_wave['end']+1])
+                    if 0.3 <= retrace <= 0.7 and latest_val > vals[prev_up['start']] - 2 and vals[prev_up['end']] >= mw_peak * 0.5:
                         phase = 'pre_main'
             mi = merged.index(main_wave); ci = merged.index(current)
             if phase == 'post_main' and ci>mi+2 and current['type']=='up' and current['amplitude']<main_wave['amplitude']*0.6: phase = 'terminal'
