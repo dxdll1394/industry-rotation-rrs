@@ -30,8 +30,9 @@ def load_market_data():
     closes = [float(r[1]) for r in rows]
     return pd.Series(closes, index=pd.to_datetime(dates))
 
-def fetch_all_close_data(force=False):
+def fetch_all_close_data(force=False, max_cache_age_days=7):
     import akshare as ak
+    from datetime import date
     ensure_dirs()
     pool = load_pool()
     stocks = [{**item, "sector": sector} for sector, items in pool.items() for item in items]
@@ -39,20 +40,29 @@ def fetch_all_close_data(force=False):
     all_data = {}
     total = len(stocks)
     done = 0
+    today = date.today()
     for s in stocks:
         code = s["code"]
         if not force:
             cached = load_close_cache(code)
             if cached is not None:
-                all_data[code] = cached
-                done += 1
-                continue
+                cache_last = cached.index.max().date()
+                if (today - cache_last).days < max_cache_age_days:
+                    all_data[code] = cached
+                    done += 1
+                    continue
         try:
             df = ak.stock_value_em(symbol=code)
             if df is not None and not df.empty:
                 df = df.rename(columns={"数据日期": "date", "当日收盘价": "close", "当日涨跌幅": "change_pct"})
                 df["date"] = pd.to_datetime(df["date"])
                 df = df.set_index("date")[["close", "change_pct"]]
+                df = df[~df.index.duplicated(keep="last")]
+                if not force:
+                    cached = load_close_cache(code)
+                    if cached is not None:
+                        df = pd.concat([cached, df])
+                        df = df[~df.index.duplicated(keep="last")].sort_index()
                 all_data[code] = df
                 save_close_cache(code, df)
         except Exception as e:

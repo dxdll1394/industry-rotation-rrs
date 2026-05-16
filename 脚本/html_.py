@@ -4,12 +4,11 @@ from config import DATA_DIR, TRAJECTORY_INTERVAL, HISTORICAL_DATES, COLORS
 from calc import get_trajectory, get_quad
 
 
-LATEST_DATE_LABEL = HISTORICAL_DATES[-1][5:]  # "05-12"
-
-
-def gen_html(trajectories, update_date):
+def gen_html(trajectories, update_date, pool=None, stock_rs=None):
+    stock_rs = stock_rs or {}
     sectors_data = []
     ci = 0
+    actual_latest_date = None
     for sector in sorted(trajectories.keys()):
         st = trajectories[sector]
         traj, lx, ly, hist_nodes = get_trajectory(st["rs_ratio"], st["rs_momentum"], TRAJECTORY_INTERVAL)
@@ -17,6 +16,8 @@ def gen_html(trajectories, update_date):
             continue
         color = COLORS[ci % len(COLORS)]
         ci += 1
+        if actual_latest_date is None and traj:
+            actual_latest_date = traj[-1]["date"]
 
         hist_map = {}
         for hn in hist_nodes:
@@ -26,6 +27,17 @@ def gen_html(trajectories, update_date):
         latest_val = [round(lx, 2), round(ly, 2)]
         arrows = [[trajectory_path[i]["value"], trajectory_path[i + 1]["value"]] for i in range(len(trajectory_path) - 1)]
 
+        stocks = (pool or {}).get(sector, [])
+        stock_list = []
+        for s in stocks:
+            sr = stock_rs.get(s["code"], {})
+            stock_list.append({
+                "code": s["code"],
+                "name": s["name"],
+                "rs_ratio": sr.get("rs_ratio"),
+                "rs_momentum": sr.get("rs_momentum"),
+                "quad": sr.get("quad"),
+            })
         sectors_data.append({
             "name": sector,
             "color": color,
@@ -33,12 +45,13 @@ def gen_html(trajectories, update_date):
             "arrows": arrows,
             "latest": latest_val,
             "stockCount": st["stock_count"],
-            "latestDate": LATEST_DATE_LABEL,
+            "stockList": stock_list,
+            "latestDate": actual_latest_date[5:] if actual_latest_date else "",
             "histMap": hist_map,
             "quad": get_quad(lx, ly),
         })
 
-    hist_dates = HISTORICAL_DATES[:-1]
+    hist_dates = HISTORICAL_DATES[:]
     hist_series_list = []
     for d in hist_dates:
         items = []
@@ -76,10 +89,46 @@ def gen_html(trajectories, update_date):
   .legend-item {{ padding:2px 8px; border-radius:3px; background:#fff; font-size:11px; }}
   .date-marker {{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:2px; }}
   .footer {{ text-align:center; color:#aaa; font-size:10px; margin:8px 0; }}
+  .modal-overlay {{ display:none; position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:999; }}
+  .modal {{ display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; padding:20px 24px; min-width:300px; max-width:420px; max-height:80vh; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,0.2); z-index:1000; }}
+  .modal h3 {{ margin:0 0 12px; font-size:16px; }}
+  .modal .close {{ float:right; cursor:pointer; font-size:18px; color:#999; border:none; background:none; }}
+  .modal .close:hover {{ color:#333; }}
+  .modal table {{ width:100%; border-collapse:collapse; font-size:13px; }}
+  .modal td {{ padding:4px 6px; border-bottom:1px solid #eee; }}
+  .modal td:first-child {{ color:#888; width:80px; }}
+  .modal .quad-badge {{ display:inline-block; padding:1px 8px; border-radius:3px; font-size:11px; color:#fff; margin-left:8px; }}
+  .tabs {{ text-align:center; margin:0 0 10px; }}
+  .tabs button {{ background:#e0e0e0; color:#333; border:none; padding:6px 18px; border-radius:4px 4px 0 0; cursor:pointer; font-size:12px; margin:0 2px; }}
+  .tabs button.active {{ background:#fff; color:#1a1a2e; font-weight:bold; box-shadow:0 -1px 3px rgba(0,0,0,0.06); }}
+  .color-sq {{ display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:2px; vertical-align:middle; }}
+  #trendTable {{ display:none; }}
+  #trendTable .wrap {{ overflow-x:auto; background:#fff; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.08); padding:12px; }}
+  #trendTable table {{ border-collapse:collapse; font-size:11px; white-space:nowrap; }}
+  #trendTable th {{ position:sticky; top:0; background:#f8f9fa; padding:4px 6px; border:1px solid #eee; text-align:center; font-weight:600; }}
+  #trendTable td {{ padding:3px 5px; border:1px solid #eee; text-align:center; }}
+  #trendTable .sector-name {{ text-align:left; font-weight:500; position:sticky; left:0; background:#fff; z-index:1; }}
+  #trendTable .q-L {{ color:#1565C0; font-weight:bold; }}
+  #trendTable .q-I {{ color:#2E7D32; font-weight:bold; }}
+  #trendTable .q-W {{ color:#E65100; font-weight:bold; }}
+  #trendTable .q-G {{ color:#999; }}
+  #trendTable .chg-up {{ color:#d32f2f; }}
+  #trendTable .chg-down {{ color:#2E7D32; }}
+  #trendTable .chg-sign {{ font-size:9px; }}
+  #trendTable .exp-btn {{ cursor:pointer; font-size:10px; color:#999; user-select:none; padding:0 4px; }}
+  #trendTable .exp-btn:hover {{ color:#333; }}
+  #trendTable .stock-row td {{ background:#fafafa; padding:2px 10px; font-size:10px; text-align:left; }}
+  #trendTable .stock-row .s-code {{ color:#999; }}
+  #trendTable .stock-row .s-name {{ color:#333; }}
+  #trendTable .stock-row .s-rs {{ font-size:9px; margin-left:8px; }}
 </style>
 </head>
 <body>
 <div class="container">
+  <div class="tabs">
+    <button id="tabChart" class="active" onclick="switchTab('chart')">📊 四象限图</button>
+    <button id="tabTrend" onclick="switchTab('trend')">📈 趋势变化表</button>
+  </div>
   <h1>行业轮动 RRS 轨迹图</h1>
   <div class="meta">{update_date} | RS Ratio(63d) vs RS Momentum(21d) | 基准: 上证指数 | {len(sectors_data)}个行业</div>
   <div id="chart"></div>
@@ -88,10 +137,18 @@ def gen_html(trajectories, update_date):
     <button onclick="toggleMode()" id="modeBtn">单行业模式</button>
     <button onclick="zoomChart(0.7)">放大</button>
     <button onclick="zoomChart(1.4)">缩小</button>
-    <button onclick="chart.dispatchAction({{type:'legendAllSelect'}});setTimeout(updateArrows,50)" style="margin-left:6px;">显示全部</button>
+    <button onclick="hideAll()" style="margin-left:6px;">隐藏全部</button>
+    <button onclick="chart.dispatchAction({{type:'legendAllSelect'}});setTimeout(updateArrows,50)">显示全部</button>
+    <span style="margin-left:10px;">
+      <button onclick="filterQuad('L')" style="background:#1565C0;">L</button>
+      <button onclick="filterQuad('I')" style="background:#2E7D32;">I</button>
+      <button onclick="filterQuad('W')" style="background:#E65100;">W</button>
+      <button onclick="filterQuad('G')" style="background:#999;">G</button>
+    </span>
     <span style="margin-left:12px;">
-      <span class="date-marker" style="background:#666;"></span>4/23
-      <span class="date-marker" style="background:#999;width:12px;height:12px;"></span>4/30
+      <span class="date-marker" style="background:#666;"></span>{hist_dates[0][5:]}
+      <span class="date-marker" style="background:#999;width:12px;height:12px;"></span>{hist_dates[1][5:]}
+      <span class="date-marker" style="background:#999;width:12px;height:12px;"></span>{hist_dates[2][5:]}
       <span class="date-marker" style="background:#222;width:14px;height:14px;"></span>当前
     </span>
   </div>
@@ -101,7 +158,16 @@ def gen_html(trajectories, update_date):
     <span class="legend-item">[W] Weakening 走弱</span>
     <span class="legend-item">[G] Lagging 低迷</span>
   </div>
-  <div class="footer">数据:东方财富 个股等权聚合 | 每周六更新 | 方块=4/23 菱形=4/30 圆点=当前 | 悬停查看行业轨迹</div>
+   <div class="footer">数据:东方财富 个股等权聚合 | 每周六更新 | 方块={hist_dates[0][5:]} 菱形={hist_dates[1][5:]},{hist_dates[2][5:]} 圆点=当前 | 点击圆点查看成分股</div>
+</div>
+<div id="trendTable">
+  <div class="wrap" id="trendWrap"></div>
+</div>
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
+<div class="modal" id="stockModal">
+  <button class="close" onclick="closeModal()">&times;</button>
+  <h3 id="modalTitle"></h3>
+  <table id="modalTable"></table>
 </div>
 <script>
 const sectorsData = {sectors_json};
@@ -136,6 +202,95 @@ const markArea = {{
     [{{xAxis: 0, yAxis: -yLimit}}, {{xAxis: xLimit, yAxis: 0, itemStyle: {{color: '#FFF3E0', opacity: 0.12}}}}],
   ]
 }};
+
+let trendSortCol = -1, trendSortDir = 1;
+let expandedSectors = new Set();
+
+document.getElementById('trendWrap').addEventListener('click', function(e) {{
+  const btn = e.target.closest('.exp-btn');
+  if (!btn) return;
+  const sector = btn.dataset.sector;
+  if (expandedSectors.has(sector)) expandedSectors.delete(sector);
+  else expandedSectors.add(sector);
+  buildTrendTable();
+}});
+
+const QC = {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}};
+const QN = {{L:'Leading',I:'Improving',W:'Weakening',G:'Lagging'}};
+
+function buildTrendTable() {{
+  const dates = [...new Set(sectorsData.flatMap(s => s.trajectory.map(p => p.date)))].sort().reverse();
+  const sorted = [...sectorsData];
+  if (trendSortCol >= 0) {{
+    const col = trendSortCol;
+    sorted.sort((a, b) => {{
+      const va = a.trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
+      const vb = b.trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
+      return (vb - va) * trendSortDir;
+    }});
+  }}
+  const nCols = dates.length + 1;
+  let html = '<div style="margin-bottom:6px;font-size:10px;color:#888">';
+  html += '<span style="margin-right:10px"><span class="color-sq" style="background:#1565C0"></span><b style="color:#1565C0">L</b> Leading</span>';
+  html += '<span style="margin-right:10px"><span class="color-sq" style="background:#2E7D32"></span><b style="color:#2E7D32">I</b> Improving</span>';
+  html += '<span style="margin-right:10px"><span class="color-sq" style="background:#E65100"></span><b style="color:#E65100">W</b> Weakening</span>';
+  html += '<span><span class="color-sq" style="background:#999"></span><b style="color:#999">G</b> Lagging</span>';
+  html += '</div>';
+  html += '<table><thead><tr><th class="sector-name">行业</th>';
+  dates.forEach((d, di) => {{
+    const active = di === trendSortCol;
+    const arrow = active ? (trendSortDir > 0 ? ' ▲' : ' ▼') : '';
+    html += '<th onclick="trendSortCol=' + di + ';trendSortDir=' + (active && trendSortDir > 0 ? -1 : 1) + ';buildTrendTable()" style="cursor:pointer">' + d.slice(5).replace('-','/') + '<br><span style="font-weight:400;font-size:9px">RS / MO' + arrow + '</span></th>';
+  }});
+  html += '</tr></thead><tbody>';
+  sorted.forEach(s => {{
+    const map = {{}};
+    s.trajectory.forEach(p => map[p.date] = p.value);
+    const exp = expandedSectors.has(s.name);
+    html += '<tr><td class="sector-name q-' + s.quad + '"><span class="exp-btn" data-sector="' + s.name.replace(/"/g, '&quot;') + '">' + (exp ? '−' : '+') + '</span>' + s.name + '</td>';
+    dates.forEach((d, di) => {{
+      const v = map[d];
+      if (!v) {{ html += '<td>-</td>'; return; }}
+      const [x, y] = v;
+      const q = getQuad(x, y);
+      let chg = '';
+      if (di > 0) {{
+        const pv = map[dates[di-1]];
+        if (pv) {{
+          const diff = x - pv[0];
+          chg = diff > 0 ? '<span class="chg-up">↑</span>' : diff < 0 ? '<span class="chg-down">↓</span>' : '→';
+        }}
+      }}
+      html += '<td class="q-' + q + '">' + x.toFixed(1) + ' / ' + y.toFixed(1) + ' <span class="chg-sign">' + chg + '</span></td>';
+    }});
+    html += '</tr>';
+    if (exp && s.stockList) {{
+      html += '<tr class="stock-row"><td colspan="' + nCols + '">';
+      s.stockList.forEach(st => {{
+        const qc = {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}};
+        const ex = st.code.startsWith('6') ? 'sh' : (st.code.startsWith('8') || st.code.startsWith('4') ? 'bj' : 'sz');
+        const url = 'https://quote.eastmoney.com/' + ex + st.code + '.html';
+        const rs = st.rs_ratio != null ? '<span class="s-rs" style="color:' + qc[st.quad] + '">RS ' + st.rs_ratio.toFixed(1) + ' / MO ' + st.rs_momentum.toFixed(1) + '</span>' : '';
+        html += '<a href="' + url + '" target="_blank" style="text-decoration:none"><span class="s-code">' + st.code + '</span> <span class="s-name">' + st.name + '</span></a>' + rs + ' &nbsp; ';
+      }});
+      html += '</td></tr>';
+    }}
+  }});
+  html += '</tbody></table>';
+  document.getElementById('trendWrap').innerHTML = html;
+}}
+
+function switchTab(tab) {{
+  document.getElementById('tabChart').className = tab === 'chart' ? 'active' : '';
+  document.getElementById('tabTrend').className = tab === 'trend' ? 'active' : '';
+  document.getElementById('chart').style.display = tab === 'chart' ? 'block' : 'none';
+  document.querySelector('.controls').style.display = tab === 'chart' ? 'block' : 'none';
+  document.querySelector('.legend').style.display = tab === 'chart' ? 'flex' : 'none';
+  document.querySelector('.footer').style.display = tab === 'chart' ? 'block' : 'none';
+  document.getElementById('trendTable').style.display = tab === 'trend' ? 'block' : 'none';
+  if (tab === 'trend') buildTrendTable();
+  if (tab === 'chart') chart.resize();
+}}
 
 const chart = echarts.init(document.getElementById('chart'));
 let showLines = true;
@@ -199,31 +354,33 @@ function buildOption(showLines, filterSector) {{
     z: 2,
   }}));
 
-  const latestSeries = active.map(s => ({{
-    name: s.name,
-    type: 'scatter',
-    data: [{{ name: s.name, value: [...s.latest, s.stockCount] }}],
-    symbolSize: 14,
-    itemStyle: {{ color: s.color, opacity: 0.9, borderColor: '#fff', borderWidth: 1.5 }},
-    label: {{ show: true, formatter: s.name + ' (' + s.latestDate + ')', fontSize: 11, fontWeight: 'bold', position: 'right' }},
-    emphasis: {{ scale: 1.5 }},
-    z: 5,
-  }}));
-
-  const histChartSeries = histSeries.map((hs, idx) => ({{
-    name: fmtDate(hs.date),
-    type: 'scatter',
-    data: filterSector ? hs.items.filter(item => item.name === filterSector) : hs.items,
-    symbol: idx === 0 ? 'rect' : 'diamond',
-    symbolSize: idx === 0 ? 11 : 13,
-    label: {{ show: true, formatter: fmtDate(hs.date), fontSize: 8, color: '#888', position: 'bottom' }},
-    z: 3,
-  }}));
+  const markerSeries = active.map(s => {{
+    const pts = [];
+    histSeries.forEach((hs, idx) => {{
+      const item = hs.items.find(i => i.name === s.name);
+      if (!item) return;
+      pts.push({{
+        name: s.name, value: item.value,
+        symbol: idx === 0 ? 'rect' : 'diamond',
+        symbolSize: idx === 0 ? 11 : 13,
+        label: {{ show: true, formatter: fmtDate(hs.date), fontSize: 8, color: '#888', position: 'bottom' }},
+        itemStyle: {{ color: s.color }},
+      }});
+    }});
+    pts.push({{
+      name: s.name, value: [...s.latest, s.stockCount],
+      symbol: 'circle', symbolSize: 14,
+      label: {{ show: true, formatter: s.name + ' (' + s.latestDate + ')', fontSize: 11, fontWeight: 'bold', position: 'right' }},
+      itemStyle: {{ color: s.color, opacity: 0.9, borderColor: '#fff', borderWidth: 1.5 }},
+      emphasis: {{ scale: 1.5 }},
+    }});
+    return {{ name: s.name, type: 'scatter', data: pts, z: 5 }};
+  }});
 
   const series = [];
   if (showLines) series.push(...lineSeries, ...scatterOnLine);
-  series.push(...latestSeries, ...histChartSeries);
-  series[series.length - histChartSeries.length].markArea = markArea;
+  if (markerSeries.length) markerSeries[0].markArea = markArea;
+  series.push(...markerSeries);
 
   return {{
     tooltip: {{
@@ -276,6 +433,16 @@ function toggleLines() {{
   chart.setOption(buildOption(showLines, null), true);
 }}
 
+function hideAll() {{
+  sectorsData.forEach(s => chart.dispatchAction({{type: 'legendUnSelect', name: s.name}}));
+  setTimeout(() => updateArrows(0), 50);
+}}
+
+function filterQuad(q) {{
+  sectorsData.forEach(s => chart.dispatchAction({{type: s.quad === q ? 'legendSelect' : 'legendUnSelect', name: s.name}}));
+  setTimeout(() => updateArrows(sectorsData.filter(s => s.quad === q).length), 50);
+}}
+
 chart.setOption(buildOption(true, null));
 setTimeout(() => updateArrows(30), 100);
 
@@ -290,11 +457,6 @@ chart.on('mouseover', function(params) {{
   if (!sector) return;
   chart.dispatchAction({{ type: 'downplay' }});
   chart.dispatchAction({{ type: 'highlight', name: sector }});
-  const n = sectorsData.length;
-  const histStart = showLines ? n * 3 : n;
-  histSeries.forEach((_, i) => {{
-    chart.dispatchAction({{ type: 'highlight', seriesIndex: histStart + i, dataName: sector }});
-  }});
 }});
 
 chart.on('globalout', function() {{
@@ -315,7 +477,7 @@ chart.on('legendselectchanged', function(params) {{
     return;
   }}
   setTimeout(() => {{
-    const sel = chart.getOption()[0].legend[0].selected || {{}};
+    const sel = chart.getOption().legend?.[0]?.selected || {{}};
     updateArrows(Object.values(sel).filter(v => v).length);
   }}, 50);
 }});
@@ -331,8 +493,33 @@ function zoomChart(factor) {{
 
 let clickBusy = false;
 
+function showStockModal(sector) {{
+  const s = sectorsData.find(d => d.name === sector);
+  if (!s || !s.stockList) return;
+  const qc = {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}};
+  const qn = {{L:'Leading',I:'Improving',W:'Weakening',G:'Lagging'}};
+  document.getElementById('modalTitle').innerHTML = s.name + ' <span class="quad-badge" style="background:' + qc[s.quad] + '">[' + s.quad + '] ' + qn[s.quad] + '</span>';
+  const tbody = document.getElementById('modalTable');
+  tbody.innerHTML = s.stockList.map(st => {{
+    const ex = st.code.startsWith('6') ? 'sh' : (st.code.startsWith('8') || st.code.startsWith('4') ? 'bj' : 'sz');
+    return '<tr><td><a href="https://quote.eastmoney.com/' + ex + st.code + '.html" target="_blank" style="color:#1565C0;text-decoration:none">' + st.code + '</a></td><td>' + st.name + '</td></tr>';
+  }}).join('');
+  document.getElementById('modalOverlay').style.display = 'block';
+  document.getElementById('stockModal').style.display = 'block';
+}}
+
+function closeModal() {{
+  document.getElementById('modalOverlay').style.display = 'none';
+  document.getElementById('stockModal').style.display = 'none';
+}}
+
 chart.on('click', function(params) {{
   if (params.componentType === 'legend' || clickBusy) return;
+  if (params.seriesType === 'scatter' && params.value && params.value.length === 3) {{
+    const sector = resolveSector(params);
+    if (sector) showStockModal(sector);
+    return;
+  }}
   const sector = resolveSector(params);
   if (!sector) return;
   clickBusy = true;

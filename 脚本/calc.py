@@ -81,6 +81,33 @@ def get_trajectory(rr, mo, interval=None):
     return points, latest_x, latest_y, hist_nodes
 
 
+def calc_stock_rs_data(price_data, market, pool):
+    result = {}
+    for sector, items in pool.items():
+        for item in items:
+            code = item["code"]
+            if code not in price_data:
+                continue
+            stk = price_data[code]["close"]
+            common = stk.index.intersection(market.index)
+            if len(common) < RS_LOOKBACK + MO_LOOKBACK + 30:
+                continue
+            rel = stk[common] / market[common]
+            rr = rel.rolling(window=RS_LOOKBACK).mean()
+            rr_val = (rel / rr - 1) * 100
+            mo = rr.pct_change(periods=MO_LOOKBACK) * 100
+            rr_v = rr_val.dropna()
+            mo_v = mo.dropna()
+            if len(rr_v) < 2 or len(mo_v) < 2:
+                continue
+            result[code] = {
+                "rs_ratio": float(rr_v.iloc[-1]),
+                "rs_momentum": float(mo_v.iloc[-1]),
+                "quad": get_quad(float(rr_v.iloc[-1]), float(mo_v.iloc[-1])),
+            }
+    return result
+
+
 def get_quad(x, y):
     if x >= 0 and y >= 0:
         return "L"
