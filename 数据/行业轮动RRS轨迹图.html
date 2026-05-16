@@ -279,6 +279,7 @@ function buildTrendTable() {
   html += '<span style="margin-right:10px"><span class="color-sq" style="background:#2E7D32"></span><b style="color:#2E7D32">I</b> Improving</span>';
   html += '<span style="margin-right:10px"><span class="color-sq" style="background:#E65100"></span><b style="color:#E65100">W</b> Weakening</span>';
   html += '<span><span class="color-sq" style="background:#999"></span><b style="color:#999">G</b> Lagging</span>';
+  html += '<span style="margin-left:12px;color:#aaa;font-size:9px">↑N/↓N = RS连升/连降N期</span>';
   html += '</div>';
   html += '<table><thead><tr><th class="sector-name">行业</th>';
   dates.forEach((d, di) => {
@@ -292,7 +293,7 @@ function buildTrendTable() {
     s.trajectory.forEach(p => map[p.date] = p.value);
     const exp = expandedSectors.has(s.name);
     const cd = consecDir(s.trajectory.map(p => p.value));
-    const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold">↓' + Math.abs(cd) + '</span>' : '';
+    const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold" title="RS连续上升' + cd + '期">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold" title="RS连续下降' + Math.abs(cd) + '期">↓' + Math.abs(cd) + '</span>' : '';
     html += '<tr><td class="sector-name q-' + s.quad + '"><span class="exp-btn" data-sector="' + s.name.replace(/"/g, '&quot;') + '">' + (exp ? '−' : '+') + '</span>' + s.name + ' ' + cdHtml + '</td>';
     dates.forEach((d, di) => {
       const v = map[d];
@@ -388,6 +389,7 @@ function buildStockTrendTable() {
     const arrow = active ? (stockTrendSortDir > 0 ? '▲' : '▼') : '';
     html += '<span data-stock-sort="' + k + '" style="cursor:pointer;padding:1px 6px;border-radius:3px;background:' + (active ? '#1a1a2e' : '#e0e0e0') + ';color:' + (active ? '#fff' : '#333') + '">' + label + ' ' + arrow + '</span>';
   });
+  html += '<span style="margin-left:12px;color:#aaa;font-size:9px">↑N/↓N = RS连升/连降N期 | 格中↑↓为RS较上期变化</span>';
   html += '</div>';
   html += '<table><thead><tr><th class="st-name" style="min-width:60px">名称 <span style="font-weight:400;font-size:9px;color:#999">代码</span></th><th style="min-width:40px">行业</th>';
 
@@ -405,7 +407,7 @@ function buildStockTrendTable() {
     const ex = code.startsWith('6') ? 'sh' : (code.startsWith('8') || code.startsWith('4') ? 'bj' : 'sz');
     const emUrl = 'https://quote.eastmoney.com/' + ex + code + '.html';
     const cd = consecDir(st.trajectory.map(p => p.value));
-    const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold">↓' + Math.abs(cd) + '</span>' : '';
+    const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold" title="RS连续上升' + cd + '期">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold" title="RS连续下降' + Math.abs(cd) + '期">↓' + Math.abs(cd) + '</span>' : '';
     html += '<tr class="st-row-q-' + st.quad + '"><td class="st-name q-' + st.quad + '"><a href="' + emUrl + '" target="_blank" style="text-decoration:none;color:inherit">' + st.name + ' <span class="st-code">' + code + '</span></a> ' + cdHtml + '</td><td style="font-size:9px;color:#888">' + st.sector + '</td>';
     dates.forEach((d, di) => {
       const v = map[d];
