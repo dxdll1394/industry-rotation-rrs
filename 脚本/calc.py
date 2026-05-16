@@ -29,8 +29,8 @@ def calc_sector_rrs(price_data, market, pool):
 
         sector_rel = pd.concat(rel_series, axis=1).mean(axis=1)
         rs_ratio = sector_rel.rolling(window=RS_LOOKBACK).mean()
-        rs_momentum = rs_ratio.pct_change(periods=MO_LOOKBACK) * 100
         rs_ratio_val = (sector_rel / rs_ratio - 1) * 100
+        rs_momentum = rs_ratio_val - rs_ratio_val.shift(MO_LOOKBACK)
 
         sector_trajectories[sector] = {
             "rs_ratio": rs_ratio_val.dropna(),
