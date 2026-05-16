@@ -108,6 +108,38 @@ def calc_stock_rs_data(price_data, market, pool):
     return result
 
 
+def calc_stock_trajectory_data(price_data, market, pool):
+    result = {}
+    for sector, items in pool.items():
+        for item in items:
+            code = item["code"]
+            if code not in price_data:
+                continue
+            stk = price_data[code]["close"]
+            common = stk.index.intersection(market.index)
+            if len(common) < RS_LOOKBACK + MO_LOOKBACK + 30:
+                continue
+            rel = stk[common] / market[common]
+            rr = rel.rolling(window=RS_LOOKBACK).mean()
+            rr_val = (rel / rr - 1) * 100
+            mo = rr.pct_change(periods=MO_LOOKBACK) * 100
+            rr_v = rr_val.dropna()
+            mo_v = mo.dropna()
+            if len(rr_v) < 2 or len(mo_v) < 2:
+                continue
+            traj, lx, ly, hist_nodes = get_trajectory(rr_v, mo_v, TRAJECTORY_INTERVAL)
+            if traj is None:
+                continue
+            result[code] = {
+                "name": item["name"],
+                "sector": sector,
+                "trajectory": [{"value": [round(p["x"], 2), round(p["y"], 2)], "date": p["date"]} for p in traj],
+                "latest": [round(lx, 2), round(ly, 2)],
+                "quad": get_quad(lx, ly),
+            }
+    return result
+
+
 def get_quad(x, y):
     if x >= 0 and y >= 0:
         return "L"

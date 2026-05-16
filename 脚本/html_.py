@@ -4,7 +4,7 @@ from config import DATA_DIR, TRAJECTORY_INTERVAL, HISTORICAL_DATES, COLORS
 from calc import get_trajectory, get_quad
 
 
-def gen_html(trajectories, update_date, pool=None, stock_rs=None):
+def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=None):
     stock_rs = stock_rs or {}
     sectors_data = []
     ci = 0
@@ -67,6 +67,7 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None):
     sectors_json = json.dumps(sectors_data, ensure_ascii=False)
     hist_series_json = json.dumps(hist_series_list, ensure_ascii=False)
     hist_dates_json = json.dumps(hist_dates, ensure_ascii=False)
+    stock_traj_json = json.dumps(stock_traj or {}, ensure_ascii=False)
 
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -121,6 +122,13 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None):
   #trendTable .stock-row .s-code {{ color:#999; }}
   #trendTable .stock-row .s-name {{ color:#333; }}
   #trendTable .stock-row .s-rs {{ font-size:9px; margin-left:8px; }}
+  #stockTrendTable {{ display:none; }}
+  #stockTrendTable .wrap {{ background:#fff; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.08); padding:12px; }}
+  #stockTrendTable table {{ border-collapse:collapse; font-size:10px; white-space:nowrap; width:100%; }}
+  #stockTrendTable th {{ position:sticky; top:0; background:#f8f9fa; padding:3px 4px; border:1px solid #eee; text-align:center; font-weight:600; font-size:10px; }}
+  #stockTrendTable td {{ padding:2px 4px; border:1px solid #eee; text-align:center; font-size:10px; }}
+  #stockTrendTable .st-name {{ text-align:left; font-weight:500; position:sticky; left:0; background:#fff; z-index:1; }}
+  #stockTrendTable .st-code {{ color:#999; font-weight:400; }}
 </style>
 </head>
 <body>
@@ -128,6 +136,7 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None):
   <div class="tabs">
     <button id="tabChart" class="active" onclick="switchTab('chart')">📊 四象限图</button>
     <button id="tabTrend" onclick="switchTab('trend')">📈 趋势变化表</button>
+    <button id="tabStockTrend" onclick="switchTab('stockTrend')">📋 个股趋势表</button>
   </div>
   <h1>行业轮动 RRS 轨迹图</h1>
   <div class="meta">{update_date} | RS Ratio(63d) vs RS Momentum(21d) | 基准: 上证指数 | {len(sectors_data)}个行业</div>
@@ -163,6 +172,21 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None):
 <div id="trendTable">
   <div class="wrap" id="trendWrap"></div>
 </div>
+<div id="stockTrendTable">
+  <div class="wrap">
+    <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="stockSearch" placeholder="搜索股票名称/代码..." oninput="buildStockTrendTable()" style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;width:200px">
+      <span style="font-size:11px;color:#888">象限筛选:</span>
+      <button onclick="stockQuadFilter='';buildStockTrendTable()" style="padding:2px 10px;border:1px solid #ddd;border-radius:3px;cursor:pointer;font-size:11px;background:#fff">全部</button>
+      <button onclick="stockQuadFilter='L';buildStockTrendTable()" style="padding:2px 10px;border:1px solid #1565C0;border-radius:3px;cursor:pointer;font-size:11px;color:#1565C0;font-weight:bold">L</button>
+      <button onclick="stockQuadFilter='I';buildStockTrendTable()" style="padding:2px 10px;border:1px solid #2E7D32;border-radius:3px;cursor:pointer;font-size:11px;color:#2E7D32;font-weight:bold">I</button>
+      <button onclick="stockQuadFilter='W';buildStockTrendTable()" style="padding:2px 10px;border:1px solid #E65100;border-radius:3px;cursor:pointer;font-size:11px;color:#E65100;font-weight:bold">W</button>
+      <button onclick="stockQuadFilter='G';buildStockTrendTable()" style="padding:2px 10px;border:1px solid #999;border-radius:3px;cursor:pointer;font-size:11px;color:#999;font-weight:bold">G</button>
+      <span id="stockCount" style="font-size:11px;color:#888;margin-left:4px"></span>
+    </div>
+    <div style="overflow-x:auto" id="stockTrendWrap"></div>
+  </div>
+</div>
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
 <div class="modal" id="stockModal">
   <button class="close" onclick="closeModal()">&times;</button>
@@ -173,6 +197,7 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None):
 const sectorsData = {sectors_json};
 const histSeries = {hist_series_json};
 const HIST_DATES = {hist_dates_json};
+const stockTrajData = {stock_traj_json};
 
 const quads = {{'L':'Leading','I':'Improving','W':'Weakening','G':'Lagging'}};
 
@@ -205,6 +230,8 @@ const markArea = {{
 
 let trendSortCol = -1, trendSortDir = 1;
 let expandedSectors = new Set();
+let stockTrendSortCol = -1, stockTrendSortDir = -1;
+let stockQuadFilter = '';
 
 document.getElementById('trendWrap').addEventListener('click', function(e) {{
   const btn = e.target.closest('.exp-btn');
@@ -280,15 +307,95 @@ function buildTrendTable() {{
   document.getElementById('trendWrap').innerHTML = html;
 }}
 
+function buildStockTrendTable() {{
+  const search = (document.getElementById('stockSearch').value || '').trim().toLowerCase();
+  const entries = Object.entries(stockTrajData);
+
+  // collect all dates
+  const allDates = new Set();
+  entries.forEach(([_, st]) => st.trajectory.forEach(p => allDates.add(p.date)));
+  const dates = [...allDates].sort().reverse();
+
+  // filter + sort
+  let filtered = entries.filter(([code, st]) => {{
+    if (stockQuadFilter && st.quad !== stockQuadFilter) return false;
+    if (search) {{
+      const m = search.toLowerCase();
+      return code.includes(m) || st.name.toLowerCase().includes(m) || st.sector.toLowerCase().includes(m);
+    }}
+    return true;
+  }});
+
+  if (stockTrendSortCol >= 0) {{
+    const col = stockTrendSortCol;
+    filtered.sort((a, b) => {{
+      const va = a[1].trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
+      const vb = b[1].trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
+      return (va - vb) * stockTrendSortDir;
+    }});
+  }} else {{
+    // default sort by latest RS ratio desc
+    filtered.sort((a, b) => b[1].latest[0] - a[1].latest[0]);
+  }}
+
+  const totalStocks = Object.keys(stockTrajData).length;
+  document.getElementById('stockCount').textContent = '${{filtered.length}} / ${{totalStocks}} 只';
+
+  const nCols = dates.length + 1;
+  let html = '';
+  html += '<div style="margin-bottom:4px;font-size:10px;color:#888">';
+  html += '<span style="margin-right:10px"><span class="color-sq" style="background:#1565C0"></span><b style="color:#1565C0">L</b> Leading</span>';
+  html += '<span style="margin-right:10px"><span class="color-sq" style="background:#2E7D32"></span><b style="color:#2E7D32">I</b> Improving</span>';
+  html += '<span style="margin-right:10px"><span class="color-sq" style="background:#E65100"></span><b style="color:#E65100">W</b> Weakening</span>';
+  html += '<span><span class="color-sq" style="background:#999"></span><b style="color:#999">G</b> Lagging</span>';
+  html += '</div>';
+  html += '<table><thead><tr><th class="st-name" style="min-width:60px">名称 <span style="font-weight:400;font-size:9px;color:#999">代码</span></th><th style="min-width:40px">行业</th>';
+
+  const active = stockTrendSortCol;
+  dates.forEach((d, di) => {{
+    const a = di === active;
+    const arrow = a ? (stockTrendSortDir > 0 ? ' ▲' : ' ▼') : '';
+    html += '<th onclick="stockTrendSortCol=' + di + ';stockTrendSortDir=' + (a && stockTrendSortDir > 0 ? -1 : 1) + ';buildStockTrendTable()" style="cursor:pointer">' + d.slice(5).replace('-','/') + '<br><span style="font-weight:400;font-size:9px">RS/MO' + arrow + '</span></th>';
+  }});
+
+  html += '</tr></thead><tbody>';
+  filtered.forEach(([code, st]) => {{
+    const map = {{}};
+    st.trajectory.forEach(p => map[p.date] = p.value);
+    html += '<tr><td class="st-name q-' + st.quad + '">' + st.name + ' <span class="st-code">' + code + '</span></td><td style="font-size:9px;color:#888">' + st.sector + '</td>';
+    dates.forEach((d, di) => {{
+      const v = map[d];
+      if (!v) {{ html += '<td>-</td>'; return; }}
+      const [x, y] = v;
+      const q = getQuad(x, y);
+      let chg = '';
+      if (di > 0) {{
+        const pv = map[dates[di-1]];
+        if (pv) {{
+          const diff = x - pv[0];
+          chg = diff > 0 ? '<span class="chg-up">↑</span>' : diff < 0 ? '<span class="chg-down">↓</span>' : '→';
+        }}
+      }}
+      html += '<td class="q-' + q + '">' + x.toFixed(1) + ' / ' + y.toFixed(1) + ' <span class="chg-sign">' + chg + '</span></td>';
+    }});
+    html += '</tr>';
+  }});
+  html += '</tbody></table>';
+  document.getElementById('stockTrendWrap').innerHTML = html;
+}}
+
 function switchTab(tab) {{
   document.getElementById('tabChart').className = tab === 'chart' ? 'active' : '';
   document.getElementById('tabTrend').className = tab === 'trend' ? 'active' : '';
+  document.getElementById('tabStockTrend').className = tab === 'stockTrend' ? 'active' : '';
   document.getElementById('chart').style.display = tab === 'chart' ? 'block' : 'none';
   document.querySelector('.controls').style.display = tab === 'chart' ? 'block' : 'none';
   document.querySelector('.legend').style.display = tab === 'chart' ? 'flex' : 'none';
   document.querySelector('.footer').style.display = tab === 'chart' ? 'block' : 'none';
   document.getElementById('trendTable').style.display = tab === 'trend' ? 'block' : 'none';
+  document.getElementById('stockTrendTable').style.display = tab === 'stockTrend' ? 'block' : 'none';
   if (tab === 'trend') buildTrendTable();
+  if (tab === 'stockTrend') buildStockTrendTable();
   if (tab === 'chart') chart.resize();
 }}
 

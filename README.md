@@ -31,9 +31,10 @@ RS_Momentum = RS_Ratio × 21 日变化率
 
 ## 用法
 
+尽量少用强制刷新
 ```bash
 python3 行业轮动RRS.py              # 只读缓存
-python3 行业轮动RRS.py --force       # 强制刷新数据
+python3 行业轮动RRS.py --force       # 强制刷新数据,慎用
 python3 行业轮动RRS.py --html        # 同时生成交互式 HTML
 python3 行业轮动RRS.py --cron        # 定时模式（仅周六更新）
 ```

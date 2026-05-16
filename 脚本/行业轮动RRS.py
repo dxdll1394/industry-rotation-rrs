@@ -16,7 +16,7 @@ from datetime import datetime, date
 
 from config import DATA_DIR, TRAJECTORY_INTERVAL
 from data import load_pool, load_market_data, fetch_all_close_data
-from calc import calc_sector_rrs, calc_stock_rs_data, get_trajectory, get_quad
+from calc import calc_sector_rrs, calc_stock_rs_data, calc_stock_trajectory_data, get_trajectory, get_quad
 from png import plot_rrg
 from html_ import gen_html
 
@@ -79,7 +79,8 @@ def main():
     plot_rrg(trajectories, update_date)
     if make_html:
         stock_rs = calc_stock_rs_data(stock_data, market, pool)
-        gen_html(trajectories, update_date, pool=pool, stock_rs=stock_rs)
+        stock_traj = calc_stock_trajectory_data(stock_data, market, pool)
+        gen_html(trajectories, update_date, pool=pool, stock_rs=stock_rs, stock_traj=stock_traj)
 
 
 if __name__ == "__main__":
