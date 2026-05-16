@@ -2,6 +2,7 @@
 数据/.last_update
 数据/行业轮动RRS轨迹图.png
 数据/行业轮动RRS轨迹图.html
+数据/stock_traj_data.json
 *.parquet
 .DS_Store
 session-*.md
