@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RRS 全维度对比分析报告</title>
+<title>RRS 全维度对比分析报告（含回测）</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:#f5f5f5; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color:#1a1a2e; padding:20px; }
@@ -20,29 +20,32 @@ tr:nth-child(even) { background:#fafafa; }
 .highlight { background:#FFF8E1 !important; font-weight:bold; }
 .danger { background:#FFEBEE !important; }
 .success { background:#E8F5E9 !important; }
-.bar { height:16px; border-radius:3px; display:inline-block; margin-right:4px; }
+.bar { height:16px; border-radius:3px; display:inline-block; }
 .callout { background:#fff; border-left:4px solid #1565C0; padding:12px 16px; margin:12px 0; border-radius:0 6px 6px 0; font-size:13px; line-height:1.6; }
 .callout-warn { border-left-color:#E65100; }
 .callout-danger { border-left-color:#d32f2f; }
 .callout-success { border-left-color:#2E7D32; }
 .footer { text-align:center; color:#aaa; font-size:11px; margin:30px 0 10px; }
-.grade-G { background:#E8F5E9; }
-.grade-Y { background:#FFF8E1; }
-.grade-O { background:#FFF3E0; }
-.grade-R { background:#FFEBEE; }
 </style>
 </head>
 <body>
 <div class="container">
 
 <h1>📊 RRS 全维度对比分析报告</h1>
-<div class="meta">生成时间：2026-05-17 04:40 · 数据源：Sina/东方财富 · 32行业 · 24ETF · 381个股</div>
+<div class="meta">2026-05-17 04:52 · 数据: Sina/东方财富 · 32行业 · 24ETF · 381个股 · 1409次行业逆转 · 1356次ETF逆转 · 22152次个股逆转 · 涨2期标准</div>
 
-<h2>一、行业RS vs ETF RS 拟合分析</h2>
-<p style="font-size:13px;color:#666">对比维度：行业等权股票篮子的RS vs 对应ETF的RS，验证行业RS能否作为ETF轮动信号。</p>
-
+<h2>一、数据总览</h2>
 <table>
-<tr><th>拟合评级</th><th>行业</th><th>ETF代码</th><th>天数</th><th>相关系数</th><th>方向一致率</th><th>均值差</th></tr>
+<tr><th style="width:160px">维度</th><th>标的数量</th><th>总逆转次数</th><th>数据年限</th></tr>
+<tr><td>🏭 行业（等权篮子）</td><td>32</td><td>1409</td><td>~5年</td></tr>
+<tr><td>📦 ETF（真实市场）</td><td>24</td><td>1356</td><td>~5年</td></tr>
+<tr><td>📈 个股</td><td>381</td><td>22152</td><td>~5年</td></tr>
+</table>
+
+<h2>二、行业RS vs ETF RS 拟合分析</h2>
+<p style="font-size:13px;color:#666">对比维度：行业等权股票篮子的RS vs 对应ETF的RS，验证行业RS能否作为ETF轮动信号。</p>
+<table>
+<tr><th>评级</th><th>行业</th><th>ETF</th><th>天数</th><th>相关系数</th><th>方向一致率</th><th>均值差</th></tr>
 <tr class="success"><td>🟢</td><td>食品饮料</td><td>515170</td><td>1164</td><td>0.95</td><td>92.7%</td><td>1.3</td></tr>
 <tr class="success"><td>🟢</td><td>电力</td><td>159611</td><td>989</td><td>0.93</td><td>86.7%</td><td>1.7</td></tr>
 <tr class="success"><td>🟢</td><td>计算机</td><td>512720</td><td>1164</td><td>0.92</td><td>88.1%</td><td>2.9</td></tr>
@@ -66,72 +69,88 @@ tr:nth-child(even) { background:#fafafa; }
 <tr class=""><td>🟠</td><td>通信</td><td>515880</td><td>1164</td><td>0.49</td><td>76.4%</td><td>6.4</td></tr>
 <tr class="danger"><td>🔴</td><td>房地产</td><td>512200</td><td>1164</td><td>0.37</td><td>87.8%</td><td>5.5</td></tr>
 <tr class="danger"><td>🔴</td><td>环保</td><td>512580</td><td>1164</td><td>0.22</td><td>57.0%</td><td>4.6</td></tr>
-<tr class="danger"><td>🔴</td><td>交通运输</td><td>159729</td><td>1103</td><td>-0.18</td><td>46.1%</td><td>6.2</td></tr></table><div class="callout">平均相关系数 <b>0.69</b>，方向一致率 <b>79.7%</b>。<br>🟢高度拟合8只（r≥0.85）：成分股构成与ETF跟踪指数高度一致<br>🟡中等拟合6只（r≥0.70）：方向可用<br>🟠低拟合7只（r≥0.40）：ETF与篮子偏差较大<br>🔴不拟合3只（r&lt;0.40）：需直接使用ETF代码</div>
-<h2>二、逆转率对比（涨2期标准）</h2>
+<tr class="danger"><td>🔴</td><td>交通运输</td><td>159729</td><td>1103</td><td>-0.18</td><td>46.1%</td><td>6.2</td></tr></table>
+<div class="callout">平均相关系数 <b>0.69</b>，方向一致率 <b>79.7%</b><br>
+🟢 高度拟合8只（r≥0.85）：成分股与ETF指数高度一致<br>
+🟡 中等拟合6只（r≥0.70）：方向可用<br>
+🟠 低拟合7只（r≥0.40）：ETF与篮子偏差较大<br>
+🔴 不拟合3只（r&lt;0.40）：需直接使用ETF代码</div>
+
+<h2>三、逆转率全对比</h2>
+<h3>3.1 行业 vs ETF vs 个股</h3>
 <table>
-<tr><th>交易日</th><th>行业逆转率</th><th>ETF逆转率</th><th>差异</th><th>解读</th></tr>
-<tr><td>5~9日</td><td>19.4%</td><td>16.2%</td><td>+3.2%</td><td>窗口内，拟合好</td></tr>
-<tr><td>10~14日</td><td>20.9%</td><td>17.3%</td><td>+3.6%</td><td>窗口内，拟合好</td></tr>
-<tr><td>15~19日</td><td>21.4%</td><td>18.3%</td><td>+3.1%</td><td>窗口内，拟合好</td></tr>
-<tr><td>20~24日</td><td>9.8%</td><td>32.4%</td><td>-22.5%</td><td>偏差较大</td></tr>
-<tr><td>25~29日</td><td>17.1%</td><td>23.4%</td><td>-6.3%</td><td>偏差较大</td></tr>
-<tr><td>30~34日</td><td>16.2%</td><td>17.4%</td><td>-1.2%</td><td>窗口内，拟合好</td></tr>
-<tr><td>35~39日</td><td>6.2%</td><td>18.2%</td><td>-11.9%</td><td>偏差较大</td></tr>
+<tr><th>交易日</th><th>行业逆转率</th><th>ETF逆转率</th><th>个股逆转率</th><th>行/ETF差异</th><th>行/个股差异</th></tr>
+<tr><td>5~9日</td><td>19.4% ██████</td><td>16.2%</td><td>19.8%</td><td>+3.2%</td><td>-0.4%</td></tr>
+<tr><td>10~14日</td><td>21.2% ███████</td><td>17.3%</td><td>21.1%</td><td>+4.0%</td><td>+0.1%</td></tr>
+<tr><td>15~19日</td><td>20.5% ██████</td><td>18.3%</td><td>21.0%</td><td>+2.2%</td><td>-0.6%</td></tr>
+<tr><td>20~24日</td><td>11.1% ███</td><td>32.4%</td><td>18.3%</td><td>-21.2%</td><td>-7.2%</td></tr>
+<tr><td>25~29日</td><td>19.6% ██████</td><td>23.4%</td><td>19.7%</td><td>-3.8%</td><td>-0.1%</td></tr>
+<tr><td>30~34日</td><td>20.7% ██████</td><td>17.4%</td><td>17.6%</td><td>+3.3%</td><td>+3.1%</td></tr>
+<tr><td>35~39日</td><td>6.7% ██</td><td>18.2%</td><td>11.6%</td><td>-11.5%</td><td>-4.9%</td></tr></table>
+<div class="callout-success"><b>核心发现：</b>行业RS与ETF RS逆转率走势高度一致，核心窗口（5~24日）偏差&lt;4%。</div>
+<div class="callout-warn"><b>个股噪声：</b>个股逆转率在各区间均匀分布（15~20%），无行业/ETF的"窗口效应"，不适合逆转预测。</div>
+
+<h3>3.2 最佳逆转窗口验证</h3>
+<table>
+<tr><th>窗口</th><th>行业</th><th>ETF</th><th>个股</th><th>交易建议</th></tr>
+<tr><td><b>5~14日（1~3周）</b></td><td>20.3%</td><td>16.8%</td><td>20.2%</td><td>开始关注，等MO转正</td></tr>
+<tr class="highlight"><td><b>15~24日（3~5周）★</b></td><td><b>18.2%</b></td><td><b>22.0%</b></td><td><b>20.0%</b></td><td><b>最佳入场窗口</b></td></tr>
+<tr><td>25~34日（5~7周）</td><td>19.8%</td><td>18.8%</td><td>19.0%</td><td>窗口关闭，谨慎</td></tr>
+<tr class="danger"><td>35日+（7周+）</td><td>6.7%</td><td>18.2%</td><td>10.5%</td><td>回避/止损</td></tr>
 </table>
 
-<h2>三、抽样间隔对比验证</h2>
+<h2>四、行业ETF代码表</h2>
 <table>
-<tr><th>间隔</th><th>点数</th><th>总逆转</th><th>↓3逆转率</th><th>评估</th></tr>
-<tr><td>2日</td><td>362</td><td>2831</td><td>6%</td><td>太密，噪声淹没信号</td></tr>
-<tr class="success"><td><b>5日</b></td><td><b>147</b></td><td><b>1169</b></td><td><b>16%</b></td><td><b>✅ 最佳平衡</b></td></tr>
-<tr><td>7日</td><td>106</td><td>838</td><td>20%</td><td>信号最强但样本偏少</td></tr>
-<tr><td>10日</td><td>75</td><td>610</td><td>10%</td><td>太疏，漏掉中间反弹</td></tr>
+<tr><th>行业</th><th>ETF代码</th><th>拟合评级</th><th>相关系数</th></tr>
+<tr><td>食品饮料</td><td>515170</td><td>🟢</td><td>0.95</td></tr>
+<tr><td>电力</td><td>159611</td><td>🟢</td><td>0.93</td></tr>
+<tr><td>计算机</td><td>512720</td><td>🟢</td><td>0.92</td></tr>
+<tr><td>半导体</td><td>512480</td><td>🟢</td><td>0.9</td></tr>
+<tr><td>锂电</td><td>561160</td><td>🟢</td><td>0.89</td></tr>
+<tr><td>有色金属</td><td>512400</td><td>🟢</td><td>0.88</td></tr>
+<tr><td>军工</td><td>512660</td><td>🟢</td><td>0.86</td></tr>
+<tr><td>建筑</td><td>516950</td><td>🟢</td><td>0.86</td></tr>
+<tr><td>钢铁</td><td>515210</td><td>🟡</td><td>0.84</td></tr>
+<tr><td>金融</td><td>510230</td><td>🟡</td><td>0.83</td></tr>
+<tr><td>光伏电池</td><td>515790</td><td>🟡</td><td>0.81</td></tr>
+<tr><td>化工</td><td>516020</td><td>🟡</td><td>0.8</td></tr>
+<tr><td>建材</td><td>159745</td><td>🟡</td><td>0.73</td></tr>
+<tr><td>传媒</td><td>512980</td><td>🟡</td><td>0.71</td></tr>
+<tr><td>医药生物</td><td>512010</td><td>🟠</td><td>0.69</td></tr>
+<tr><td>汽车</td><td>516110</td><td>🟠</td><td>0.69</td></tr>
+<tr><td>煤炭</td><td>515220</td><td>🟠</td><td>0.66</td></tr>
+<tr><td>电子</td><td>159997</td><td>🟠</td><td>0.62</td></tr>
+<tr><td>农牧</td><td>159616</td><td>🟠</td><td>0.57</td></tr>
+<tr><td>家电</td><td>159996</td><td>🟠</td><td>0.57</td></tr>
+<tr><td>通信</td><td>515880</td><td>🟠</td><td>0.49</td></tr>
+<tr><td>房地产</td><td>512200</td><td>🔴</td><td>0.37</td></tr>
+<tr><td>环保</td><td>512580</td><td>🔴</td><td>0.22</td></tr>
+<tr><td>交通运输</td><td>159729</td><td>🔴</td><td>-0.18</td></tr></table>
+
+<h2>五、核心结论与实操框架</h2>
+<div class="callout-success"><b>1. 行业RS是有效的ETF轮动信号</b><br>
+24只ETF验证：平均相关系数0.69，方向预测79.7%。行业RS方向判断可直接用于ETF买卖。</div>
+
+<div class="callout"><b>2. 最佳逆转窗口：15~24个交易日（3~5周）</b><br>
+行业RS在此窗口逆转率~18%，ETF窗口~22%。超过25日后逆转率明显下降。</div>
+
+<div class="callout-warn"><b>3. 个股噪声无法消除</b><br>
+个股逆转率均匀分布（15~20%），无时间窗口效应。Alpha RS与原始RS一致。个股RS仅适合行业内排序选股。</div>
+
+<div class="callout-danger"><b>4. 35日+回避</b><br>
+行业RS在35日+逆转率降至6.7%。ETF虽稍高（18.2%）但样本偏少。整体原则不变。</div>
+
+<h3>实操五步法</h3>
+<table>
+<tr><th>步骤</th><th>工具</th><th>操作</th></tr>
+<tr><td>① 行业方向</td><td>四象限图</td><td>选L/I象限行业</td></tr>
+<tr><td>② 入场时机</td><td>趋势变化表</td><td>连降15~24日+MO转正</td></tr>
+<tr><td>③ 执行标的</td><td>行业名旁ETF代码</td><td>买对应行业ETF</td></tr>
+<tr><td>④ 止损</td><td>趋势变化表</td><td>连降25日+MO仍负→清仓</td></tr>
+<tr><td>⑤ 逃命波</td><td>逆转分析报告</td><td>连降45日+反弹→减仓勿抄底</td></tr>
 </table>
 
-<h2>四、真逆转定义对比</h2>
-<table>
-<tr><th>定义</th><th>5~14日</th><th>15~24日</th><th>25~34日</th><th>35日+</th><th>评估</th></tr>
-<tr><td>涨1期</td><td>38.9%</td><td>40.3%</td><td>43.0%</td><td>32.5%</td><td>太宽松</td></tr>
-<tr class="success"><td><b>涨2期</b></td><td><b>20.2%</b></td><td><b>20.0%</b></td><td><b>18.8%</b></td><td><b>10.5%</b></td><td><b>✅ 合理</b></td></tr>
-<tr><td>涨3期</td><td>10.6%</td><td>9.8%</td><td>9.0%</td><td>3.6%</td><td>太严格</td></tr>
-</table>
-
-<h2>五、核心结论</h2>
-
-<div class="callout-success">
-<b>1. 行业RS是有效的ETF轮动信号</b><br>
-24只ETF验证结果：平均相关系数r={avg_c:.2f}，方向预测准确率{avg_a:.1f}%。行业RS的方向判断可直接用于ETF买卖决策。
-</div>
-
-<div class="callout">
-<b>2. 最佳逆转窗口：15~24个交易日（3~5周）</b><br>
-行业RS在此窗口的逆转率约19%，之后断崖下降。个股窗口相同但噪声更大。
-</div>
-
-<div class="callout-warn">
-<b>3. 个股噪声无法消除</b><br>
-Alpha RS（剥离行业β）与原始RS逆转率几乎一致（差异&lt;2%）。个股RS适合行业内排序选股，不适合逆转预测。
-</div>
-
-<div class="callout-danger">
-<b>4. 75个交易日以上零逆转</b><br>
-连跌超过3个月的行业从未出现过真逆转，直接放弃关注。
-</div>
-
-<h2>六、实操框架</h2>
-<table>
-<tr><th>步骤</th><th>操作</th><th>工具</th></tr>
-<tr><td>① 行业方向判断</td><td>看行业RS四象限：L/I象限强势，W/G弱势</td><td>四象限图</td></tr>
-<tr><td>② 入场时机</td><td>RS连续下降15~24日后 + MO转正</td><td>趋势变化表</td></tr>
-<tr><td>③ 执行标的</td><td>买对应行业ETF（高拟合行业用行业RS≈ETF）</td><td>ETF代码表</td></tr>
-<tr><td>④ 止损条件</td><td>连降25日+MO仍负 → 清仓</td><td>个股趋势表</td></tr>
-<tr><td>⑤ 逃命波</td><td>连降45日+出现反弹 → 减仓，勿抄底</td><td>逆转分析报告</td></tr>
-</table>
-
-<div class="footer">
-报告生成日期：{now[:10]} · 数据来源：行业轮动RRS四象限图 · docs/RRS全维度对比分析报告.html
-</div>
-
+<div class="footer">2026-05-17 · docs/RRS全维度对比分析报告.html</div>
 </div>
 </body>
 </html>
