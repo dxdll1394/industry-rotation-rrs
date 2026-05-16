@@ -506,93 +506,70 @@ function buildAnalysisReport() {
   var dateStr = snap ? snap.slice(5).replace('-','/') : (sectorsData[0] && sectorsData[0].latestDate ? sectorsData[0].latestDate : '');
 
   var html = '';
-  html += '<div style="padding:12px;font-size:12px;line-height:1.8">';
-  html += '<h2 style="font-size:18px;margin:0 0 4px">行业RRS分析报告</h2>';
-  html += '<div style="color:#888;font-size:11px;margin-bottom:12px">快照: ' + dateStr + ' | 共' + total + '个行业 | L/I占比 ' + liPct + '%</div>';
+  html += '<div style="padding:12px;font-size:12px">';
+  html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px"><span style="font-size:16px;font-weight:bold">行业RRS分析</span><span style="font-size:10px;color:#888">' + dateStr + '</span></div>';
 
-  // Summary bar
-  html += '<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
+  // Summary mini-bar
+  html += '<div style="display:flex;gap:6px;margin-bottom:12px;font-size:10px">';
   ['L','I','W','G'].forEach(function(q) {
-    var colors = {L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'};
-    var labels = {L:'强势 Leading',I:'改善 Improving',W:'走弱 Weakening',G:'低迷 Lagging'};
-    var pct = total > 0 ? Math.round(counts[q]/total*100) : 0;
-    html += '<div style="background:#fff;border-left:4px solid ' + colors[q] + ';padding:6px 12px;border-radius:4px;flex:1;min-width:100px">';
-    html += '<div style="font-size:20px;font-weight:bold;color:' + colors[q] + '">' + counts[q] + '</div>';
-    html += '<div style="font-size:10px;color:#888">' + labels[q] + ' (' + pct + '%)</div>';
+    var clr = {L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'};
+    html += '<span style="background:' + clr[q] + ';color:#fff;padding:2px 8px;border-radius:3px">' + q + ':' + counts[q] + '</span>';
+  });
+  html += '<span style="color:#888;margin-left:4px">L+I ' + liPct + '% (共' + total + '个)</span>';
+  html += '</div>';
+
+  // ===== WAVE ANALYSIS (primary) =====
+  html += '<h3 style="font-size:13px;margin:16px 0 8px;color:#333">🌊 波浪位置</h3>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  var phaseOrder = {main_advance:0, strong_advance:1, pre_main:2, terminal:3, post_main:4, no_main:9};
+  var phaseIcons = {main_advance:'★★★', strong_advance:'★★', pre_main:'📍', recovery:'▲', terminal:'▼', post_main:'—'};
+  var phaseLabels = {main_advance:'主升浪中', strong_advance:'强势推进', pre_main:'布局', terminal:'末浪', post_main:'已过'};
+  var phaseBg = {main_advance:'#E8F5E9', strong_advance:'#E8F5E9', pre_main:'#FFF8E1', terminal:'#FFEBEE', post_main:'#f8f8f8'};
+  var wkeys = Object.keys(waveData);
+  wkeys.sort(function(a,b){ return (phaseOrder[waveData[a].phase]||9) - (phaseOrder[waveData[b].phase]||9) || waveData[b].latest_rs - waveData[a].latest_rs; });
+  wkeys.forEach(function(sec) {
+    var w = waveData[sec];
+    var icon = phaseIcons[w.phase] || '';
+    var dir = w.current_type === 'up' ? '↑' : '↓';
+    html += '<div style="background:' + (phaseBg[w.phase]||'#f8f8f8') + ';border-radius:6px;padding:6px 10px;min-width:140px;flex:1;max-width:220px">';
+    html += '<div style="font-weight:bold;font-size:12px">' + icon + ' ' + sec + '</div>';
+    html += '<div style="font-size:10px;color:#666">RS ' + w.latest_rs.toFixed(0) + ' | ' + phaseLabels[w.phase] + '</div>';
+    html += '<div style="font-size:9px;color:#888">' + dir + w.current_amp.toFixed(0) + '/' + w.current_days + '天 (主升' + w.main_amp.toFixed(0) + '/' + w.main_days + '天)</div>';
     html += '</div>';
   });
   html += '</div>';
 
-  // Per-quadrant tables
-  var labels = {L:'🔵 强势（持有）',I:'🟢 改善（关注）',W:'🟠 走弱（减仓）',G:'🔴 低迷（回避）'};
+  // ===== QUADRANTS (collapsible) =====
+  html += '<h3 style="font-size:13px;margin:16px 0 8px;cursor:pointer;color:#333" onclick="var el=document.getElementById(\'quadrantSec\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'">📊 象限明细 ▾</h3>';
+  html += '<div id="quadrantSec" style="display:none">';
+  var qNames = {L:'强势',I:'改善',W:'走弱',G:'低迷'};
+  var qClr = {L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'};
   ['L','I','W','G'].forEach(function(q) {
     var items = sorted.filter(function(s) { return (snap ? getSnapQuad(s, snap) : s.quad) === q; });
     if (!items.length) return;
-    var colors = {L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'};
-    html += '<h3 style="font-size:14px;margin:16px 0 6px;color:' + colors[q] + '">' + labels[q] + ' (' + items.length + '个)</h3>';
-    html += '<table style="width:100%;font-size:11px"><tr style="background:#f8f9fa"><th style="text-align:left;padding:4px 8px">行业</th><th>RS</th><th>MO</th><th>趋势</th><th>连期</th><th>评估</th></tr>';
-    items.forEach(function(s) {
+    html += '<div style="margin:4px 0 8px"><span style="font-weight:bold;color:' + qClr[q] + ';font-size:11px">' + qNames[q] + ' (' + items.length + ')</span>';
+    html += '<span style="font-size:10px;color:#888"> ';
+    items.forEach(function(s, i) {
       var latest = getSectorLatest(s, snap);
-      var rs = latest[0].toFixed(0);
-      var mo = latest[1].toFixed(0);
-      var moSign = latest[1] >= 0 ? '+' : '';
       var traj = getTrajUpto(s, snap);
       var cd = consecDir(traj.map(function(p){return p.value;}).reverse());
-      var cdLabel = cd > 0 ? '↑' + cd : cd < 0 ? '↓' + Math.abs(cd) : '→';
-      var cdColor = cd > 0 ? '#d32f2f' : cd < 0 ? '#2E7D32' : '#999';
-      
-      var assess = '';
-      if (q === 'L') {
-        if (cd < 0 && mo < 0) assess = '⚠ 减速预警';
-        else assess = cd > 0 ? '加速上涨' : '持有';
-      } else if (q === 'I') {
-        if (mo > 3 && cd > 0) assess = '★ 转强加速';
-        else if (cd < 0) assess = '等RS止跌';
-        else assess = '弱势改善';
-      } else if (q === 'W') {
-        assess = '高位松动，减仓';
-      } else {
-        if (cd < 0 && Math.abs(cd) >= 15) assess = '⚠ 连降长，回避';
-        else if (cd > 0 && mo < -5) assess = '假反弹';
-        else if (rs < -10) assess = '放弃关注';
-        else assess = '继续观望';
-      }
-      
-      html += '<tr><td style="text-align:left;padding:4px 8px;font-weight:500">' + s.name + '</td><td style="color:' + (latest[0]>=0?'#d32f2f':'#2E7D32') + '">' + rs + '</td><td style="color:' + (latest[1]>=0?'#d32f2f':'#2E7D32') + '">' + moSign + mo + '</td><td style="color:' + cdColor + '">' + cdLabel + '</td><td>' + (cd > 0 ? cd*5 + '日' : cd < 0 ? Math.abs(cd)*5 + '日' : '') + '</td><td style="font-size:10px;color:#666">' + assess + '</td></tr>';
+      var sign = cd>0?'↑':cd<0?'↓':'→';
+      var w = waveData[s.name];
+      var wi = w ? phaseIcons[w.phase]||'' : '';
+      html += wi + s.name + '(' + latest[0].toFixed(0) + '/' + (latest[1]>=0?'+':'') + latest[1].toFixed(0) + sign + Math.abs(cd) + ')';
+      if (i < items.length - 1) html += ', ';
     });
-    html += '</table>';
+    html += '</span></div>';
   });
+  html += '</div>';
 
-  // Wave analysis section
-  html += '<h3 style="font-size:14px;margin:20px 0 6px">🌊 主升浪分析（振幅×√天数评分）</h3>';
-  html += '<table style="width:100%;font-size:11px"><tr style="background:#f8f9fa"><th>行业</th><th>RS</th><th>波浪位置</th><th>当前浪</th><th>主升浪</th><th>评分</th><th>解读</th></tr>';
-  var phaseOrder = {main_advance:0, strong_advance:1, pre_main:2, recovery:3, terminal:4, post_main:5, no_main:9};
-  var phaseIcons = {main_advance:'★★★', strong_advance:'★★', pre_main:'📍', recovery:'▲', terminal:'▼', post_main:'—', no_main:'?'};
-  var phaseLabels = {main_advance:'主升浪中', strong_advance:'强势推进', pre_main:'主升前布局', recovery:'弱势反弹', terminal:'末浪衰竭', post_main:'主升已过', no_main:'无主升'};
-  var sectors = Object.keys(waveData);
-  sectors.sort(function(a,b){ return (phaseOrder[waveData[a].phase]||9) - (phaseOrder[waveData[b].phase]||9) || waveData[b].latest_rs - waveData[a].latest_rs; });
-  sectors.forEach(function(sec) {
-    var w = waveData[sec];
-    var icon = phaseIcons[w.phase] || '—';
-    var label = phaseLabels[w.phase] || w.phase;
-    var curDir = w.current_type === 'up' ? '↑' : '↓';
-    var rowColor = '';
-    if (w.phase === 'main_advance' || w.phase === 'strong_advance') rowColor = 'background:#E8F5E9';
-    else if (w.phase === 'pre_main') rowColor = 'background:#FFF8E1';
-    else if (w.phase === 'terminal') rowColor = 'background:#FFEBEE';
-    var desc = '';
-    if (w.phase === 'main_advance') desc = '最强上升中，持有';
-    else if (w.phase === 'strong_advance') desc = '强势，距主升还差' + Math.round((1 - w.current_amp/Math.max(w.main_amp,1))*100) + '%';
-    else if (w.phase === 'pre_main') desc = 'abc调整，突破可进主升';
-    else if (w.phase === 'terminal') desc = '力度递减，减仓';
-    else desc = '等下一轮结构';
-    html += '<tr style="' + rowColor + '"><td>' + icon + ' ' + sec + '</td><td>' + w.latest_rs.toFixed(0) + '</td><td style="font-weight:bold">' + label + '</td><td>' + curDir + w.current_amp.toFixed(0) + '/' + w.current_days + '天</td><td>↑' + w.main_amp.toFixed(0) + '/' + w.main_days + '天</td><td>' + w.main_score.toFixed(0) + '</td><td style="font-size:10px;color:#666">' + desc + '</td></tr>';
-  });
-  html += '</table>';
+  // ===== WINDOW + ALERTS =====
+  html += '<h3 style="font-size:13px;margin:16px 0 8px;color:#333">🎯 机会 & 警报</h3>';
+  html += '<div style="display:flex;gap:12px;flex-wrap:wrap">';
 
-  // Window candidates
-  html += '<h3 style="font-size:14px;margin:20px 0 6px">🎯 逆转窗口候选（连降10~25日，等MO转正）</h3>';
-  html += '<table style="width:100%;font-size:11px"><tr style="background:#f8f9fa"><th>行业</th><th>RS</th><th>MO</th><th>已跌</th><th>窗口位置</th></tr>';
+  // Left: window candidates
+  html += '<div style="flex:1;min-width:200px">';
+  html += '<div style="font-size:11px;font-weight:bold;color:#1565C0;margin-bottom:4px">逆转窗口</div>';
   var found = false;
   sorted.forEach(function(s) {
     var latest = getSectorLatest(s, snap);
@@ -602,31 +579,34 @@ function buildAnalysisReport() {
     var downDays = Math.abs(cd) * 5;
     if (downDays < 10 || downDays > 25) return;
     found = true;
-    var pos = downDays >= 15 && downDays <= 24 ? '★ 最佳窗口' : '接近窗口';
-    html += '<tr' + (pos.indexOf('★')>=0?' style="background:#FFF8E1"':'') + '><td>' + s.name + '</td><td>' + latest[0].toFixed(0) + '</td><td>' + (latest[1]>=0?'+':'') + latest[1].toFixed(0) + '</td><td>↓' + downDays + '日</td><td>' + pos + '</td></tr>';
+    var star = downDays >= 15 && downDays <= 24 ? '★' : '';
+    html += '<div style="font-size:10px;padding:2px 0' + (star?';background:#FFF8E1;border-radius:3px;padding:2px 4px':'') + '">' + star + ' ' + s.name + ' ↓' + downDays + '日 RS' + latest[0].toFixed(0) + '</div>';
   });
-  if (!found) html += '<tr><td colspan="5" style="color:#888;padding:8px">当前无窗口候选</td></tr>';
-  html += '</table>';
+  if (!found) html += '<div style="font-size:10px;color:#888">无</div>';
+  html += '</div>';
 
-  // Danger zone
+  // Right: danger zone
   var danger = sorted.filter(function(s) {
     var traj = getTrajUpto(s, snap);
     var cd = consecDir(traj.map(function(p){return p.value;}).reverse());
     return cd < 0 && Math.abs(cd) * 5 >= 35;
   });
+  html += '<div style="flex:1;min-width:200px">';
+  html += '<div style="font-size:11px;font-weight:bold;color:#d32f2f;margin-bottom:4px">警报区</div>';
   if (danger.length) {
-    html += '<h3 style="font-size:14px;margin:20px 0 6px;color:#d32f2f">⚠ 警报区（连降35日+）</h3>';
-    html += '<table style="width:100%;font-size:11px"><tr style="background:#f8f9fa"><th>行业</th><th>RS</th><th>MO</th><th>已跌</th><th>建议</th></tr>';
     danger.forEach(function(s) {
       var latest = getSectorLatest(s, snap);
       var traj = getTrajUpto(s, snap);
       var cd = consecDir(traj.map(function(p){return p.value;}).reverse());
-      html += '<tr style="background:#FFEBEE"><td>' + s.name + '</td><td>' + latest[0].toFixed(0) + '</td><td>' + latest[1].toFixed(0) + '</td><td>↓' + (Math.abs(cd)*5) + '日</td><td style="font-size:10px">勿抄底，等反弹减仓</td></tr>';
+      html += '<div style="font-size:10px;color:#c62828;padding:2px 0">⚠ ' + s.name + ' ↓' + (Math.abs(cd)*5) + '日</div>';
     });
-    html += '</table>';
+  } else {
+    html += '<div style="font-size:10px;color:#888">无</div>';
   }
+  html += '</div>';
+  html += '</div>';
 
-  html += '<div style="margin-top:16px;font-size:10px;color:#aaa;text-align:center">行业轮动 RRS 四象限图工具 · 自动生成</div>';
+  html += '<div style="margin-top:12px;font-size:9px;color:#bbb;text-align:center">行业轮动 RRS · 自动生成</div>';
   html += '</div>';
   document.getElementById('analysisWrap').innerHTML = html;
 }
