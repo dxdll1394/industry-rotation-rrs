@@ -456,7 +456,7 @@ function buildTrendTable() {{
     if (exp && s.stockList) {{
       html += '<tr class="stock-row"><td colspan="' + nCols + '"><div style="display:flex;flex-direction:column;gap:2px">';
       if (s.etfCode) {{
-        const ex = s.etfCode.startsWith('6') ? 'sh' : (s.etfCode.startsWith('8') || s.etfCode.startsWith('4') ? 'bj' : 'sz');
+        const ex = s.etfCode.startsWith('51') || s.etfCode.startsWith('56') ? 'sh' : 'sz';
         const url = 'https://quote.eastmoney.com/' + ex + s.etfCode + '.html';
         html += '<div><a href="' + url + '" target="_blank" style="color:#E65100;text-decoration:none;font-size:11px">📦 ' + s.etfCode + ' ETF.' + s.name + (s.etfRS != null ? ' RS=' + s.etfRS.toFixed(1) : '') + '</a></div>';
       }}
