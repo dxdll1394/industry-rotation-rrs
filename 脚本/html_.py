@@ -175,7 +175,7 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
   </div>
   <div class="snap-bar">
     <span style="font-size:11px;color:#888">⏱ 快照</span>
-    <input type="range" id="snapSlider" min="0" max="0" value="0" step="1" oninput="onSnapSlide(this)">
+    <input type="range" id="snapSlider" min="0" max="0" value="0" step="1" oninput="onSnapPreview(this)" onchange="onSnapCommit(this)">
     <span class="snap-date" id="snapDateLabel">关闭</span>
     <label><input type="checkbox" id="compareCheck" onchange="onCompareToggle()"> 对比当前</label>
     <button class="snap-btn" onclick="clearSnapshot()">✕ 重置</button>
@@ -713,12 +713,21 @@ function zoomChart(factor) {{
 }}
 
 // snapshot
-function onSnapSlide(el) {{
+let snapPending = null;
+function onSnapPreview(el) {{
+  const idx = parseInt(el.value);
+  const d = idx === 0 ? null : snapshotDates[idx];
+  const label = document.getElementById('snapDateLabel');
+  label.textContent = d ? d.slice(5).replace('-', '/') : '关闭';
+  label.style.color = d ? '#e94560' : '#1a1a2e';
+  // defer expensive rebuild
+  if (snapPending) clearTimeout(snapPending);
+  snapPending = setTimeout(() => onSnapCommit(el), 200);
+}}
+function onSnapCommit(el) {{
+  snapPending = null;
   const idx = parseInt(el.value);
   snapshotDate = idx === 0 ? null : snapshotDates[idx];
-  const label = document.getElementById('snapDateLabel');
-  label.textContent = snapshotDate ? snapshotDate.slice(5).replace('-', '/') : '关闭';
-  label.style.color = snapshotDate ? '#e94560' : '#1a1a2e';
   chart.setOption(buildOption(showLines, isolatedSector, snapshotDate), true);
   setTimeout(() => updateArrows(30), 50);
 }}
