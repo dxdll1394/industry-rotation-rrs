@@ -371,35 +371,37 @@ function setTrendSort(mode) {{
 }}
 
 function buildTrendTable() {{
-  const dates = [...new Set(sectorsData.flatMap(s => s.trajectory.map(p => p.date)))].sort().reverse();
-  const sorted = [...sectorsData];
-  const qOrd = {{L:0, I:1, W:2, G:3}};
+  var snap = snapshotDate;
+  var allDates = [...new Set(sectorsData.flatMap(function(s) {{ return s.trajectory.map(function(p) {{ return p.date; }}); }}))].sort();
+  var dates = (snap ? allDates.filter(function(d) {{ return d <= snap; }}) : allDates).reverse();
+  var sorted = [...sectorsData];
+  var qOrd = {{L:0, I:1, W:2, G:3}};
 
   if (trendSortMode === 'name') {{
-    sorted.sort((a, b) => a.name.localeCompare(b.name) * trendSortDir);
+    sorted.sort(function(a, b) {{ return a.name.localeCompare(b.name) * trendSortDir; }});
   }} else if (trendSortMode === 'rs') {{
-    sorted.sort((a, b) => (a.latest[0] - b.latest[0]) * trendSortDir);
+    sorted.sort(function(a, b) {{ return (getSectorLatest(a, snap)[0] - getSectorLatest(b, snap)[0]) * trendSortDir; }});
   }} else if (trendSortMode === 'mo') {{
-    sorted.sort((a, b) => (a.latest[1] - b.latest[1]) * trendSortDir);
+    sorted.sort(function(a, b) {{ return (getSectorLatest(a, snap)[1] - getSectorLatest(b, snap)[1]) * trendSortDir; }});
   }} else if (trendSortMode === 'quad') {{
-    sorted.sort((a, b) => ((qOrd[a.quad]||9) - (qOrd[b.quad]||9)) * trendSortDir || a.name.localeCompare(b.name));
+    sorted.sort(function(a, b) {{ return ((qOrd[snap ? getSnapQuad(a, snap) : a.quad]||9) - (qOrd[snap ? getSnapQuad(b, snap) : b.quad]||9)) * trendSortDir || a.name.localeCompare(b.name); }});
   }} else if (trendSortMode === 'trend') {{
-    sorted.sort((a, b) => {{
-      const da = a.trajectory.map(p => p.value).reverse();
-      const db = b.trajectory.map(p => p.value).reverse();
+    sorted.sort(function(a, b) {{
+      var da = getTrajUpto(a, snap).map(function(p) {{ return p.value; }}).reverse();
+      var db = getTrajUpto(b, snap).map(function(p) {{ return p.value; }}).reverse();
       return (consecDir(da) - consecDir(db)) * trendSortDir;
     }});
   }} else if (trendSortMode === 'count') {{
-    sorted.sort((a, b) => (a.stockCount - b.stockCount) * trendSortDir);
+    sorted.sort(function(a, b) {{ return (a.stockCount - b.stockCount) * trendSortDir; }});
   }} else if (trendSortMode === 'date' && trendSortCol >= 0) {{
-    const col = trendSortCol;
-    sorted.sort((a, b) => {{
-      const va = a.trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
-      const vb = b.trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
+    var col = trendSortCol;
+    sorted.sort(function(a, b) {{
+      var va = getTrajUpto(a, snap).find(function(p) {{ return p.date === dates[col]; }})?.value[0] ?? -999;
+      var vb = getTrajUpto(b, snap).find(function(p) {{ return p.date === dates[col]; }})?.value[0] ?? -999;
       return (vb - va) * trendSortDir;
     }});
   }} else {{
-    sorted.sort((a, b) => b.latest[0] - a.latest[0]);
+    sorted.sort(function(a, b) {{ return getSectorLatest(b, snap)[0] - getSectorLatest(a, snap)[0]; }});
   }}
 
   const nCols = dates.length + 1;
@@ -428,9 +430,9 @@ function buildTrendTable() {{
   html += '</tr></thead><tbody>';
   sorted.forEach(s => {{
     const map = {{}};
-    s.trajectory.forEach(p => map[p.date] = p.value);
+    getTrajUpto(s, snap).forEach(function(p) {{ map[p.date] = p.value; }});
     const exp = expandedSectors.has(s.name);
-    const cd = consecDir(s.trajectory.map(p => p.value).reverse());
+    const cd = consecDir(getTrajUpto(s, snap).map(function(p) {{ return p.value; }}).reverse());
     const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold" title="RS连续上升' + cd + '期">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold" title="RS连续下降' + Math.abs(cd) + '期">↓' + Math.abs(cd) + '</span>' : '';
     const etfCd = s.etfTrajectory && s.etfTrajectory.length > 1 ? consecDir(s.etfTrajectory.map(p => p.value).reverse()) : 0;
     const etfCdHtml = etfCd !== 0 ? ' <span style="color:#888;font-size:9px">ETF' + (etfCd > 0 ? '<span style="color:#d32f2f">↑' + etfCd + '</span>' : '<span style="color:#2E7D32">↓' + Math.abs(etfCd) + '</span>') + '</span>' : '';
@@ -475,14 +477,19 @@ function buildTrendTable() {{
 }}
 
 function buildStockTrendTable() {{
+  var snap = snapshotDate;
   stockSectorFilter = document.getElementById('stockSectorFilter').value;
-  const search = (document.getElementById('stockSearch').value || '').trim().toLowerCase();
-  const entries = Object.entries(stockTrajData);
+  var search = (document.getElementById('stockSearch').value || '').trim().toLowerCase();
+  var entries = Object.entries(stockTrajData);
+
+  function getStockTraj(st, snap) {{
+    return snap && st.trajectory ? st.trajectory.filter(function(p) {{ return p.date <= snap; }}) : (st.trajectory || []);
+  }}
 
   // collect all dates
-  const allDates = new Set();
-  entries.forEach(([_, st]) => st.trajectory.forEach(p => allDates.add(p.date)));
-  const dates = [...allDates].sort().reverse();
+  var allDates = new Set();
+  entries.forEach(function(e) {{ getStockTraj(e[1], snap).forEach(function(p) {{ allDates.add(p.date); }}); }});
+  var dates = [...allDates].sort().reverse();
 
   // filter + sort
   let filtered = entries.filter(([code, st]) => {{
@@ -496,33 +503,45 @@ function buildStockTrendTable() {{
   }});
 
   const qOrd = {{L:0, I:1, W:2, G:3}};
+  function getStkLatest(st, snap) {{
+    if (!snap || !st.trajectory) return st.latest;
+    var p = st.trajectory.find(function(q) {{ return q.date === snap; }});
+    return p ? p.value : st.latest;
+  }}
+  function getStkTraj(st, snap) {{
+    return snap && st.trajectory ? st.trajectory.filter(function(p) {{ return p.date <= snap; }}) : (st.trajectory || []);
+  }}
   if (stockTrendSortMode === 'name') {{
-    filtered.sort((a, b) => a[1].name.localeCompare(b[1].name) * stockTrendSortDir);
+    filtered.sort(function(a, b) {{ return a[1].name.localeCompare(b[1].name) * stockTrendSortDir; }});
   }} else if (stockTrendSortMode === 'code') {{
-    filtered.sort((a, b) => a[0].localeCompare(b[0]) * stockTrendSortDir);
+    filtered.sort(function(a, b) {{ return a[0].localeCompare(b[0]) * stockTrendSortDir; }});
   }} else if (stockTrendSortMode === 'sector') {{
-    filtered.sort((a, b) => a[1].sector.localeCompare(b[1].sector) * stockTrendSortDir || a[1].name.localeCompare(b[1].name));
+    filtered.sort(function(a, b) {{ return a[1].sector.localeCompare(b[1].sector) * stockTrendSortDir || a[1].name.localeCompare(b[1].name); }});
   }} else if (stockTrendSortMode === 'rs') {{
-    filtered.sort((a, b) => (a[1].latest[0] - b[1].latest[0]) * stockTrendSortDir);
+    filtered.sort(function(a, b) {{ return (getStkLatest(a[1], snap)[0] - getStkLatest(b[1], snap)[0]) * stockTrendSortDir; }});
   }} else if (stockTrendSortMode === 'mo') {{
-    filtered.sort((a, b) => (a[1].latest[1] - b[1].latest[1]) * stockTrendSortDir);
+    filtered.sort(function(a, b) {{ return (getStkLatest(a[1], snap)[1] - getStkLatest(b[1], snap)[1]) * stockTrendSortDir; }});
   }} else if (stockTrendSortMode === 'quad') {{
-    filtered.sort((a, b) => ((qOrd[a[1].quad]||9) - (qOrd[b[1].quad]||9)) * stockTrendSortDir || a[1].name.localeCompare(b[1].name));
+    filtered.sort(function(a, b) {{
+      var qa = snap ? getQuad(getStkLatest(a[1], snap)[0], getStkLatest(a[1], snap)[1]) : a[1].quad;
+      var qb = snap ? getQuad(getStkLatest(b[1], snap)[0], getStkLatest(b[1], snap)[1]) : b[1].quad;
+      return ((qOrd[qa]||9) - (qOrd[qb]||9)) * stockTrendSortDir || a[1].name.localeCompare(b[1].name);
+    }});
   }} else if (stockTrendSortMode === 'trend') {{
-    filtered.sort((a, b) => {{
-      const da = a[1].trajectory.map(p => p.value);
-      const db = b[1].trajectory.map(p => p.value);
+    filtered.sort(function(a, b) {{
+      var da = getStkTraj(a[1], snap).map(function(p) {{ return p.value; }});
+      var db = getStkTraj(b[1], snap).map(function(p) {{ return p.value; }});
       return (consecDir(da) - consecDir(db)) * stockTrendSortDir;
     }});
   }} else if (stockTrendSortMode === 'date' && stockTrendSortCol >= 0) {{
-    const col = stockTrendSortCol;
-    filtered.sort((a, b) => {{
-      const va = a[1].trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
-      const vb = b[1].trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
+    var col = stockTrendSortCol;
+    filtered.sort(function(a, b) {{
+      var va = getStkTraj(a[1], snap).find(function(p) {{ return p.date === dates[col]; }})?.value[0] ?? -999;
+      var vb = getStkTraj(b[1], snap).find(function(p) {{ return p.date === dates[col]; }})?.value[0] ?? -999;
       return (va - vb) * stockTrendSortDir;
     }});
   }} else {{
-    filtered.sort((a, b) => b[1].latest[0] - a[1].latest[0]);
+    filtered.sort(function(a, b) {{ return getStkLatest(b[1], snap)[0] - getStkLatest(a[1], snap)[0]; }});
   }}
 
   const totalStocks = Object.keys(stockTrajData).length;
@@ -553,10 +572,10 @@ function buildStockTrendTable() {{
   html += '</tr></thead><tbody>';
   filtered.forEach(([code, st]) => {{
     const map = {{}};
-    st.trajectory.forEach(p => map[p.date] = p.value);
+    getStkTraj(st, snap).forEach(function(p) {{ map[p.date] = p.value; }});
     const ex = code.startsWith('6') ? 'sh' : (code.startsWith('8') || code.startsWith('4') ? 'bj' : 'sz');
     const emUrl = 'https://quote.eastmoney.com/' + ex + code + '.html';
-    const cd = consecDir(st.trajectory.map(p => p.value).reverse());
+    const cd = consecDir(getStkTraj(st, snap).map(function(p) {{ return p.value; }}).reverse());
     const cdHtml = cd > 0 ? '<span style="color:#d32f2f;font-size:10px;font-weight:bold" title="RS连续上升' + cd + '期">↑' + cd + '</span>' : cd < 0 ? '<span style="color:#2E7D32;font-size:10px;font-weight:bold" title="RS连续下降' + Math.abs(cd) + '期">↓' + Math.abs(cd) + '</span>' : '';
     const sec = sectorsData.find(sd => sd.name === st.sector);
     const etfTag = sec && sec.etfCode ? '<span style="color:#E65100;font-size:9px;margin-left:4px">' + sec.etfCode + '</span>' : '';
@@ -608,7 +627,7 @@ function switchTab(tab) {{
   document.getElementById('tabStockTrend').className = tab === 'stockTrend' ? 'active' : '';
   document.getElementById('chart').style.display = tab === 'chart' ? 'block' : 'none';
   document.querySelector('.controls').style.display = tab === 'chart' ? 'block' : 'none';
-  document.querySelector('.snap-bar').style.display = tab === 'chart' ? 'flex' : 'none';
+  document.querySelector('.snap-bar').style.display = 'flex';
   document.querySelector('.legend').style.display = tab === 'chart' ? 'flex' : 'none';
   document.querySelector('.footer').style.display = tab === 'chart' ? 'block' : 'none';
   document.getElementById('trendTable').style.display = tab === 'trend' ? 'block' : 'none';
@@ -658,6 +677,14 @@ function getSnapQuad(s, date) {{
 }}
 function getQuadColor(q) {{
   return {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}}[q] || '#333';
+}}
+function getSectorLatest(s, snap) {{
+  if (!snap) return s.latest;
+  var p = s.trajectory.find(function(q) {{ return q.date === snap; }});
+  return p ? p.value : s.latest;
+}}
+function getTrajUpto(s, snap) {{
+  return snap ? s.trajectory.filter(function(p) {{ return p.date <= snap; }}) : s.trajectory;
 }}
 
 function buildOption(showLines, filterSector, snapDate) {{
