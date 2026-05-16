@@ -506,70 +506,110 @@ function buildAnalysisReport() {
   var dateStr = snap ? snap.slice(5).replace('-','/') : (sectorsData[0] && sectorsData[0].latestDate ? sectorsData[0].latestDate : '');
 
   var html = '';
-  html += '<div style="padding:12px;font-size:12px">';
-  html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px"><span style="font-size:16px;font-weight:bold">行业RRS分析</span><span style="font-size:10px;color:#888">' + dateStr + '</span></div>';
+  html += '<div style="max-width:900px;margin:0 auto">';
 
-  // Summary mini-bar
-  html += '<div style="display:flex;gap:6px;margin-bottom:12px;font-size:10px">';
+  // ===== HEADER =====
+  html += '<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;border-radius:10px;padding:16px 20px;margin-bottom:14px">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+  html += '<div><div style="font-size:18px;font-weight:bold">行业 RRS 分析报告</div><div style="font-size:11px;opacity:0.7">' + dateStr + '</div></div>';
+  html += '<div style="display:flex;gap:6px">';
   ['L','I','W','G'].forEach(function(q) {
-    var clr = {L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'};
-    html += '<span style="background:' + clr[q] + ';color:#fff;padding:2px 8px;border-radius:3px">' + q + ':' + counts[q] + '</span>';
+    var clr = {L:'#42A5F5',I:'#66BB6A',W:'#FFA726',G:'#BDBDBD'};
+    var nms = {L:'强势',I:'改善',W:'走弱',G:'低迷'};
+    html += '<div style="text-align:center;min-width:44px"><div style="font-size:22px;font-weight:bold;color:' + clr[q] + '">' + counts[q] + '</div><div style="font-size:9px;opacity:0.7">' + nms[q] + '</div></div>';
   });
-  html += '<span style="color:#888;margin-left:4px">L+I ' + liPct + '% (共' + total + '个)</span>';
+  html += '</div></div>';
+  html += '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:10px;opacity:0.8">';
+  html += '<span>L+I 方向占比 <b>' + liPct + '%</b></span>';
+  if (liPct >= 60) html += '<span style="background:#66BB6A;color:#fff;padding:1px 6px;border-radius:3px">偏强</span>';
+  else if (liPct >= 40) html += '<span style="background:#FFA726;color:#fff;padding:1px 6px;border-radius:3px">中等</span>';
+  else html += '<span style="background:#EF5350;color:#fff;padding:1px 6px;border-radius:3px">偏弱</span>';
+  html += '</div></div>';
+
+  // ===== LEGEND =====
+  html += '<div style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:10px;color:#666;line-height:1.6">';
+  html += '<b>指标说明</b> ';
+  html += '<span style="color:#1565C0">RS</span>=相对大盘强弱（正=跑赢，负=跑输）&nbsp;';
+  html += '<span style="color:#2E7D32">MO</span>=RS的21日动量（正=加速跑赢）&nbsp;';
+  html += '<span>↑N/↓N</span>=RS连续同向期数（5日/期）&nbsp;';
+  html += '<span style="color:#d32f2f">连降</span>=RS持续下降天数';
   html += '</div>';
 
-  // ===== WAVE ANALYSIS (primary) =====
-  html += '<h3 style="font-size:13px;margin:16px 0 8px;color:#333">🌊 波浪位置</h3>';
-  html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  // ===== WAVE ANALYSIS =====
+  html += '<div style="background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.04)">';
+  html += '<div style="font-size:14px;font-weight:bold;margin-bottom:10px;display:flex;align-items:center;gap:6px">🌊 波浪位置 <span style="font-weight:400;font-size:10px;color:#888">振幅×√天数评分 · 合并连段+回撤过滤</span></div>';
+  
+  // Phase legend bar
+  html += '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;font-size:9px">';
+  var pInfo = [
+    {p:'main_advance',i:'★★★',l:'主升浪中',c:'#2E7D32',d:'当前上升浪≥历史主升80%'},
+    {p:'strong_advance',i:'★★',l:'强势推进',c:'#43A047',d:'振幅≥8 斜率≥1.5/期 RS>0'},
+    {p:'pre_main',i:'📍',l:'主升前布局',c:'#F9A825',d:'调整中 回撤30-70% 等突破'},
+    {p:'terminal',i:'▼',l:'末浪衰竭',c:'#E53935',d:'主升已过 当前力度递减'},
+    {p:'post_main',i:'—',l:'主升已过',c:'#757575',d:'等新一轮波浪结构形成'}
+  ];
+  pInfo.forEach(function(pi) {
+    html += '<span style="white-space:nowrap;padding:1px 6px;border-radius:3px;border:1px solid ' + pi.c + ';color:' + pi.c + '" title="' + pi.d + '">' + pi.i + ' ' + pi.l + '</span>';
+  });
+  html += '</div>';
+
+  // Wave cards grid
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px">';
   var phaseOrder = {main_advance:0, strong_advance:1, pre_main:2, terminal:3, post_main:4, no_main:9};
   var phaseIcons = {main_advance:'★★★', strong_advance:'★★', pre_main:'📍', recovery:'▲', terminal:'▼', post_main:'—'};
   var phaseLabels = {main_advance:'主升浪中', strong_advance:'强势推进', pre_main:'布局', terminal:'末浪', post_main:'已过'};
-  var phaseBg = {main_advance:'#E8F5E9', strong_advance:'#E8F5E9', pre_main:'#FFF8E1', terminal:'#FFEBEE', post_main:'#f8f8f8'};
+  var phaseBg = {main_advance:'linear-gradient(135deg,#E8F5E9,#C8E6C9)', strong_advance:'#E8F5E9', pre_main:'linear-gradient(135deg,#FFFDE7,#FFF9C4)', terminal:'#FFEBEE', post_main:'#fafafa'};
+  var phaseBorder = {main_advance:'#2E7D32', strong_advance:'#43A047', pre_main:'#F9A825', terminal:'#E53935', post_main:'#e0e0e0'};
   var wkeys = Object.keys(waveData);
   wkeys.sort(function(a,b){ return (phaseOrder[waveData[a].phase]||9) - (phaseOrder[waveData[b].phase]||9) || waveData[b].latest_rs - waveData[a].latest_rs; });
   wkeys.forEach(function(sec) {
     var w = waveData[sec];
     var icon = phaseIcons[w.phase] || '';
     var dir = w.current_type === 'up' ? '↑' : '↓';
-    html += '<div style="background:' + (phaseBg[w.phase]||'#f8f8f8') + ';border-radius:6px;padding:6px 10px;min-width:140px;flex:1;max-width:220px">';
-    html += '<div style="font-weight:bold;font-size:12px">' + icon + ' ' + sec + '</div>';
-    html += '<div style="font-size:10px;color:#666">RS ' + w.latest_rs.toFixed(0) + ' | ' + phaseLabels[w.phase] + '</div>';
-    html += '<div style="font-size:9px;color:#888">' + dir + w.current_amp.toFixed(0) + '/' + w.current_days + '天 (主升' + w.main_amp.toFixed(0) + '/' + w.main_days + '天)</div>';
+    var rsClr = w.latest_rs >= 0 ? '#d32f2f' : '#2E7D32';
+    html += '<div style="position:relative;background:' + (phaseBg[w.phase]||'#fafafa') + ';border-left:3px solid ' + (phaseBorder[w.phase]||'#e0e0e0') + ';border-radius:6px;padding:8px 10px">';
+    html += '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px"><span style="font-size:12px;font-weight:bold">' + sec + '</span><span style="font-size:9px;color:#888">' + icon + ' ' + phaseLabels[w.phase] + '</span></div>';
+    html += '<div style="font-size:10px;margin-bottom:2px"><span style="color:' + rsClr + ';font-weight:bold">RS ' + w.latest_rs.toFixed(0) + '</span></div>';
+    html += '<div style="font-size:9px;color:#888">当前 ' + dir + w.current_amp.toFixed(0) + '/' + w.current_days + '天 &nbsp; 主升 ' + w.main_amp.toFixed(0) + '/' + w.main_days + '天</div>';
     html += '</div>';
   });
-  html += '</div>';
+  html += '</div></div>';
 
   // ===== QUADRANTS (collapsible) =====
-  html += '<h3 style="font-size:13px;margin:16px 0 8px;cursor:pointer;color:#333" onclick="var el=document.getElementById(\'quadrantSec\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'">📊 象限明细 ▾</h3>';
-  html += '<div id="quadrantSec" style="display:none">';
-  var qNames = {L:'强势',I:'改善',W:'走弱',G:'低迷'};
+  html += '<div style="background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.04)">';
+  html += '<div onclick="var el=document.getElementById(\'quadrantSec\');var arrow=document.getElementById(\'quadArrow\');el.style.display=el.style.display===\'none\'?\'block\':\'none\';arrow.textContent=el.style.display===\'none\'?\'▸\':\'▾\'" style="cursor:pointer;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:6px"><span id="quadArrow">▸</span> 📊 象限明细 <span style="font-weight:400;font-size:10px;color:#888">RS/MO/趋势 一览</span></div>';
+  html += '<div id="quadrantSec" style="display:none;margin-top:10px">';
+  var qNames = {L:'强势 Leading',I:'改善 Improving',W:'走弱 Weakening',G:'低迷 Lagging'};
   var qClr = {L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'};
+  var qBg = {L:'#E3F2FD',I:'#E8F5E9',W:'#FFF3E0',G:'#f8f8f8'};
   ['L','I','W','G'].forEach(function(q) {
     var items = sorted.filter(function(s) { return (snap ? getSnapQuad(s, snap) : s.quad) === q; });
     if (!items.length) return;
-    html += '<div style="margin:4px 0 8px"><span style="font-weight:bold;color:' + qClr[q] + ';font-size:11px">' + qNames[q] + ' (' + items.length + ')</span>';
-    html += '<span style="font-size:10px;color:#888"> ';
+    html += '<div style="background:' + qBg[q] + ';border-radius:6px;padding:8px 12px;margin-bottom:6px">';
+    html += '<div style="font-weight:bold;color:' + qClr[q] + ';font-size:11px;margin-bottom:4px">' + qNames[q] + ' (' + items.length + '个)</div>';
+    html += '<div style="font-size:10px;line-height:1.8">';
     items.forEach(function(s, i) {
       var latest = getSectorLatest(s, snap);
       var traj = getTrajUpto(s, snap);
       var cd = consecDir(traj.map(function(p){return p.value;}).reverse());
       var sign = cd>0?'↑':cd<0?'↓':'→';
+      var rsClr = latest[0]>=0?'#d32f2f':'#2E7D32';
+      var moClr = latest[1]>=0?'#d32f2f':'#2E7D32';
       var w = waveData[s.name];
-      var wi = w ? phaseIcons[w.phase]||'' : '';
-      html += wi + s.name + '(' + latest[0].toFixed(0) + '/' + (latest[1]>=0?'+':'') + latest[1].toFixed(0) + sign + Math.abs(cd) + ')';
-      if (i < items.length - 1) html += ', ';
+      var wi = w ? (phaseIcons[w.phase]||'') : '';
+      html += '<span style="margin-right:4px;white-space:nowrap">' + wi + '<b>' + s.name + '</b> <span style="color:' + rsClr + '">' + latest[0].toFixed(0) + '</span>/<span style="color:' + moClr + '">' + (latest[1]>=0?'+':'') + latest[1].toFixed(0) + '</span>' + sign + Math.abs(cd) + '</span>';
     });
-    html += '</span></div>';
+    html += '</div></div>';
   });
-  html += '</div>';
+  html += '</div></div>';
 
-  // ===== WINDOW + ALERTS =====
-  html += '<h3 style="font-size:13px;margin:16px 0 8px;color:#333">🎯 机会 & 警报</h3>';
+  // ===== OPPORTUNITY & ALERTS =====
   html += '<div style="display:flex;gap:12px;flex-wrap:wrap">';
 
   // Left: window candidates
-  html += '<div style="flex:1;min-width:200px">';
-  html += '<div style="font-size:11px;font-weight:bold;color:#1565C0;margin-bottom:4px">逆转窗口</div>';
+  html += '<div style="flex:1;min-width:220px;background:#fff;border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.04)">';
+  html += '<div style="font-size:13px;font-weight:bold;margin-bottom:8px;color:#1565C0">🎯 逆转窗口候选</div>';
+  html += '<div style="font-size:9px;color:#888;margin-bottom:8px">连降10~25日行业中，15~24日为最佳窗口</div>';
   var found = false;
   sorted.forEach(function(s) {
     var latest = getSectorLatest(s, snap);
@@ -579,10 +619,16 @@ function buildAnalysisReport() {
     var downDays = Math.abs(cd) * 5;
     if (downDays < 10 || downDays > 25) return;
     found = true;
-    var star = downDays >= 15 && downDays <= 24 ? '★' : '';
-    html += '<div style="font-size:10px;padding:2px 0' + (star?';background:#FFF8E1;border-radius:3px;padding:2px 4px':'') + '">' + star + ' ' + s.name + ' ↓' + downDays + '日 RS' + latest[0].toFixed(0) + '</div>';
+    var isBest = downDays >= 15 && downDays <= 24;
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;font-size:11px' + (isBest?';background:#FFF8E1;border-radius:4px':'') + '">';
+    html += '<span style="font-weight:500">' + s.name + '</span>';
+    html += '<span style="color:#888;font-size:10px">↓' + downDays + '日</span>';
+    html += '<span style="color:' + (latest[0]>=0?'#d32f2f':'#2E7D32') + '">RS' + latest[0].toFixed(0) + '</span>';
+    html += '<span style="color:' + (latest[1]>=0?'#d32f2f':'#2E7D32') + '">MO' + (latest[1]>=0?'+':'') + latest[1].toFixed(0) + '</span>';
+    if (isBest) html += '<span style="background:#FFA726;color:#fff;padding:0 4px;border-radius:2px;font-size:9px">最佳</span>';
+    html += '</div>';
   });
-  if (!found) html += '<div style="font-size:10px;color:#888">无</div>';
+  if (!found) html += '<div style="font-size:10px;color:#888">当前无窗口候选</div>';
   html += '</div>';
 
   // Right: danger zone
@@ -591,22 +637,26 @@ function buildAnalysisReport() {
     var cd = consecDir(traj.map(function(p){return p.value;}).reverse());
     return cd < 0 && Math.abs(cd) * 5 >= 35;
   });
-  html += '<div style="flex:1;min-width:200px">';
-  html += '<div style="font-size:11px;font-weight:bold;color:#d32f2f;margin-bottom:4px">警报区</div>';
+  html += '<div style="flex:1;min-width:220px;background:#fff;border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.04)">';
+  html += '<div style="font-size:13px;font-weight:bold;margin-bottom:8px;color:#d32f2f">⚠ 警报区</div>';
+  html += '<div style="font-size:9px;color:#888;margin-bottom:8px">连降35日+的行业，逆转率低，勿抄底</div>';
   if (danger.length) {
     danger.forEach(function(s) {
       var latest = getSectorLatest(s, snap);
       var traj = getTrajUpto(s, snap);
       var cd = consecDir(traj.map(function(p){return p.value;}).reverse());
-      html += '<div style="font-size:10px;color:#c62828;padding:2px 0">⚠ ' + s.name + ' ↓' + (Math.abs(cd)*5) + '日</div>';
+      html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;font-size:11px;background:#FFEBEE;border-radius:4px;margin-bottom:2px">';
+      html += '<span style="font-weight:500">' + s.name + '</span>';
+      html += '<span style="color:#c62828;font-size:10px">↓' + (Math.abs(cd)*5) + '日</span>';
+      html += '<span style="color:#888;font-size:10px">RS' + latest[0].toFixed(0) + '</span>';
+      html += '</div>';
     });
   } else {
-    html += '<div style="font-size:10px;color:#888">无</div>';
+    html += '<div style="font-size:10px;color:#888">当前无警报</div>';
   }
-  html += '</div>';
-  html += '</div>';
+  html += '</div></div>';
 
-  html += '<div style="margin-top:12px;font-size:9px;color:#bbb;text-align:center">行业轮动 RRS · 自动生成</div>';
+  html += '<div style="margin-top:10px;font-size:9px;color:#bbb;text-align:center">行业轮动 RRS 四象限图 · 自动生成</div>';
   html += '</div>';
   document.getElementById('analysisWrap').innerHTML = html;
 }
