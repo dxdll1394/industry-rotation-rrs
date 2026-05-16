@@ -903,7 +903,9 @@ function onSnapCommit(el) {{
   const idx = parseInt(el.value);
   snapshotDate = idx === 0 ? null : snapshotDates[idx];
   chart.setOption(buildOption(showLines, isolatedSector, snapshotDate), true);
-  setTimeout(() => updateArrows(30), 50);
+  setTimeout(function() {{ updateArrows(30); }}, 50);
+  buildTrendTable();
+  buildStockTrendTable();
 }}
 function onCompareToggle() {{
   compareMode = document.getElementById('compareCheck').checked;
@@ -917,7 +919,9 @@ function clearSnapshot() {{
   document.getElementById('snapDateLabel').style.color = '#1a1a2e';
   document.getElementById('compareCheck').checked = false;
   chart.setOption(buildOption(showLines, isolatedSector, null), true);
-  setTimeout(() => updateArrows(30), 50);
+  setTimeout(function() {{ updateArrows(30); }}, 50);
+  buildTrendTable();
+  buildStockTrendTable();
 }}
 // init slider
 document.getElementById('snapSlider').max = snapshotDates.length - 1;
