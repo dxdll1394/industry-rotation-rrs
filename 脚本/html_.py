@@ -126,22 +126,33 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
                 if periods >= 2:
                     segs.append({'type':'up' if vals[end]>vals[start] else 'down','start':start,'end':end,
                         'amplitude':round(abs(vals[end]-vals[start]),1),'periods':periods,'days':periods*5,
-                        'slope':round((vals[end]-vals[start])/periods,2)})
+                        'slope':round((vals[end]-vals[start])/periods,2),
+                        'start_val':vals[start],'end_val':vals[end]})
                 i = end
 
             if len(segs) < 3: continue
-            # Merge small waves
-            merged = [segs[0]]
-            for j in range(1, len(segs)-1):
-                pa = merged[-1]['amplitude']; ca = segs[j]['amplitude']; na = segs[j+1]['amplitude']
-                if ca < 0.33 * max(pa, na) and merged[-1]['type'] == segs[j+1]['type']:
-                    prev = merged[-1]; prev['end'] = segs[j+1]['end']
+            # Merge consecutive same-type segments
+            merged2 = [segs[0]]
+            for j in range(1, len(segs)):
+                if segs[j]['type'] == merged2[-1]['type']:
+                    prev = merged2[-1]; prev['end'] = segs[j]['end']
                     prev['amplitude'] = round(abs(vals[prev['end']]-vals[prev['start']]),1)
                     prev['periods'] = prev['end']-prev['start']; prev['days'] = prev['periods']*5
                     if prev['periods']>0: prev['slope'] = round((vals[prev['end']]-vals[prev['start']])/prev['periods'],2)
                 else:
-                    merged.append(segs[j])
-            if merged and merged[-1]['end'] < segs[-1]['end']: merged.append(segs[-1])
+                    merged2.append(segs[j])
+            # Merge small waves
+            merged = [merged2[0]]
+            for j in range(1, len(merged2)-1):
+                pa = merged[-1]['amplitude']; ca = merged2[j]['amplitude']; na = merged2[j+1]['amplitude']
+                if ca < 0.33 * max(pa, na) and merged[-1]['type'] == merged2[j+1]['type']:
+                    prev = merged[-1]; prev['end'] = merged2[j+1]['end']
+                    prev['amplitude'] = round(abs(vals[prev['end']]-vals[prev['start']]),1)
+                    prev['periods'] = prev['end']-prev['start']; prev['days'] = prev['periods']*5
+                    if prev['periods']>0: prev['slope'] = round((vals[prev['end']]-vals[prev['start']])/prev['periods'],2)
+                else:
+                    merged.append(merged2[j])
+            if merged and merged[-1]['end'] < merged2[-1]['end']: merged.append(merged2[-1])
 
             up_waves = [w for w in merged if w['type']=='up' and w['amplitude']>=5]
             if not up_waves: continue
@@ -159,7 +170,10 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
             elif current['type']=='up' and current['amplitude']>=8 and current['slope']>=1.5: phase = 'strong_advance'
             elif current['type']=='down':
                 prev_up = next((w for w in reversed(merged[:-1]) if w['type']=='up'), None)
-                if prev_up and prev_up['amplitude']>=5 and latest_val>prev_up['start_val']-2: phase = 'pre_main'
+                if prev_up and prev_up['amplitude']>=5:
+                    retrace = (vals[prev_up['end']] - latest_val) / prev_up['amplitude']
+                    if 0.3 <= retrace <= 0.7 and latest_val > vals[prev_up['start']] - 2:
+                        phase = 'pre_main'
             mi = merged.index(main_wave); ci = merged.index(current)
             if ci>mi+2 and current['type']=='up' and current['amplitude']<main_wave['amplitude']*0.6: phase = 'terminal'
             if latest_val<0 and current['type']=='up' and current['amplitude']<8: phase = 'recovery'
