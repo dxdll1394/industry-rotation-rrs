@@ -613,41 +613,6 @@ function buildOption(showLines, filterSector, snapDate) {{
     grid: {{ top: 40, bottom: 60, left: 65, right: 40 }},
   }};
 }}
-    }},
-    legend: {{
-      show: true, bottom: 0, icon: 'circle', itemWidth: 8, itemHeight: 8,
-      textStyle: {{fontSize: 11}},
-      formatter: name => {{
-        const s = sectorsData.find(d => d.name === name);
-        const idx = {{L:0,I:1,W:2,G:3}}[s.quad];
-        return s ? ['[L] ','[I] ','[W] ','[G] '][idx != null ? idx : 3] + name : name;
-      }},
-      data: [...sectorsData].sort((a, b) => {{
-        const q = {{L:0, I:1, W:2, G:3}};
-        return (q[a.quad]||9) - (q[b.quad]||9) || a.name.localeCompare(b.name);
-      }}).map(s => ({{
-        name: s.name,
-        textStyle: {{ color: {{L:'#1565C0', I:'#2E7D32', W:'#E65100', G:'#999'}}[s.quad] || '#333' }},
-      }})),
-    }},
-    xAxis: {{
-      name: 'RS Ratio -> 相对大盘走强', nameLocation: 'center', nameGap: 35,
-      splitLine: {{show: true, lineStyle: {{type: 'dashed', color: '#ddd'}}}},
-      axisLine: {{show: true}},
-      min: -xLimit, max: xLimit,
-    }},
-    yAxis: {{
-      name: 'RS Momentum -> 动量向上', nameLocation: 'center', nameGap: 40,
-      splitLine: {{show: true, lineStyle: {{type: 'dashed', color: '#ddd'}}}},
-      axisLine: {{show: true}},
-      min: -yLimit, max: yLimit,
-    }},
-    series: series,
-    dataZoom: [{{ type: 'inside', xAxisIndex: [0], yAxisIndex: [0], zoomSensitivity: 0.12 }}],
-    toolbox: {{ feature: {{ dataZoom: {{ xAxisIndex: [0], yAxisIndex: [0] }}, restore: {{}} }}, right: 20, top: 10 }},
-    grid: {{ top: 40, bottom: 60, left: 65, right: 40 }},
-  }};
-}}
 
 function toggleLines() {{
   showLines = !showLines;
