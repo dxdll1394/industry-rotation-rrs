@@ -56,8 +56,12 @@
   #stockTrendTable table { border-collapse:collapse; font-size:10px; white-space:nowrap; width:100%; }
   #stockTrendTable th { position:sticky; top:0; background:#f8f9fa; padding:3px 4px; border:1px solid #eee; text-align:center; font-weight:600; font-size:10px; }
   #stockTrendTable td { padding:2px 4px; border:1px solid #eee; text-align:center; font-size:10px; }
-  #stockTrendTable .st-name { text-align:left; font-weight:500; position:sticky; left:0; background:#fff; z-index:1; }
+  #stockTrendTable .st-name { text-align:left; font-weight:500; position:sticky; left:0; z-index:1; background:inherit; }
   #stockTrendTable .st-code { color:#999; font-weight:400; }
+  #stockTrendTable .st-row-q-L { background:#E3F2FD; }
+  #stockTrendTable .st-row-q-I { background:#E8F5E9; }
+  #stockTrendTable .st-row-q-W { background:#FFF3E0; }
+  #stockTrendTable .st-row-q-G { background:#f8f8f8; }
   .snap-bar { text-align:center; margin:6px 0; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; }
   .snap-bar label { font-size:11px; color:#888; cursor:pointer; }
   .snap-bar input[type="range"] { width:160px; vertical-align:middle; }
@@ -307,7 +311,9 @@ function buildStockTrendTable() {
   filtered.forEach(([code, st]) => {
     const map = {};
     st.trajectory.forEach(p => map[p.date] = p.value);
-    html += '<tr><td class="st-name q-' + st.quad + '">' + st.name + ' <span class="st-code">' + code + '</span></td><td style="font-size:9px;color:#888">' + st.sector + '</td>';
+    const ex = code.startsWith('6') ? 'sh' : (code.startsWith('8') || code.startsWith('4') ? 'bj' : 'sz');
+    const emUrl = 'https://quote.eastmoney.com/' + ex + code + '.html';
+    html += '<tr class="st-row-q-' + st.quad + '"><td class="st-name q-' + st.quad + '"><a href="' + emUrl + '" target="_blank" style="text-decoration:none;color:inherit">' + st.name + ' <span class="st-code">' + code + '</span></a></td><td style="font-size:9px;color:#888">' + st.sector + '</td>';
     dates.forEach((d, di) => {
       const v = map[d];
       if (!v) { html += '<td>-</td>'; return; }
