@@ -200,6 +200,7 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
     <button id="tabChart" class="active" onclick="switchTab('chart')">📊 四象限图</button>
     <button id="tabTrend" onclick="switchTab('trend')">📈 趋势变化表</button>
     <button id="tabStockTrend" onclick="switchTab('stockTrend')">📋 个股趋势表</button>
+    <button id="tabAnalysis" onclick="switchTab('analysis')">📝 行业分析</button>
   </div>
   <h1>行业轮动 RRS 轨迹图</h1>
   <div class="meta">{update_date} | RS Ratio(63d) vs RS Momentum(21d) | 基准: 上证指数 | {len(sectors_data)}个行业</div>
@@ -268,6 +269,9 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
     </div>
     <div style="overflow-x:auto" id="stockTrendWrap"></div>
   </div>
+</div>
+<div id="analysisPanel" style="display:none">
+  <div class="wrap" id="analysisWrap"></div>
 </div>
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
 <div class="modal" id="stockModal">
@@ -610,6 +614,118 @@ function buildStockTrendTable() {{
   document.getElementById('stockTrendWrap').innerHTML = html;
 }}
 
+function buildAnalysisReport() {{
+  var snap = snapshotDate;
+  var sorted = [...sectorsData];
+  var qo = {{L:0, I:1, W:2, G:3}};
+  sorted.sort(function(a, b) {{ return (qo[snap ? getSnapQuad(a, snap) : a.quad]||9) - (qo[snap ? getSnapQuad(b, snap) : b.quad]||9) || a.name.localeCompare(b.name); }});
+
+  var counts = {{L:0, I:0, W:0, G:0}};
+  sorted.forEach(function(s) {{ var q = snap ? getSnapQuad(s, snap) : s.quad; counts[q]++; }});
+  var total = Object.values(counts).reduce(function(a,b){{return a+b;}}, 0);
+  var liPct = total > 0 ? Math.round((counts.L + counts.I) / total * 100) : 0;
+
+  var dateStr = snap ? snap.slice(5).replace('-','/') : (sectorsData[0] && sectorsData[0].latestDate ? sectorsData[0].latestDate : '');
+
+  var html = '';
+  html += '<div style=\"padding:12px;font-size:12px;line-height:1.8\">';
+  html += '<h2 style=\"font-size:18px;margin:0 0 4px\">行业RRS分析报告</h2>';
+  html += '<div style=\"color:#888;font-size:11px;margin-bottom:12px\">快照: ' + dateStr + ' | 共' + total + '个行业 | L/I占比 ' + liPct + '%</div>';
+
+  // Summary bar
+  html += '<div style=\"display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap\">';
+  ['L','I','W','G'].forEach(function(q) {{
+    var colors = {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}};
+    var labels = {{L:'强势 Leading',I:'改善 Improving',W:'走弱 Weakening',G:'低迷 Lagging'}};
+    var pct = total > 0 ? Math.round(counts[q]/total*100) : 0;
+    html += '<div style=\"background:#fff;border-left:4px solid ' + colors[q] + ';padding:6px 12px;border-radius:4px;flex:1;min-width:100px\">';
+    html += '<div style=\"font-size:20px;font-weight:bold;color:' + colors[q] + '\">' + counts[q] + '</div>';
+    html += '<div style=\"font-size:10px;color:#888\">' + labels[q] + ' (' + pct + '%)</div>';
+    html += '</div>';
+  }});
+  html += '</div>';
+
+  // Per-quadrant tables
+  var labels = {{L:'🔵 强势（持有）',I:'🟢 改善（关注）',W:'🟠 走弱（减仓）',G:'🔴 低迷（回避）'}};
+  ['L','I','W','G'].forEach(function(q) {{
+    var items = sorted.filter(function(s) {{ return (snap ? getSnapQuad(s, snap) : s.quad) === q; }});
+    if (!items.length) return;
+    var colors = {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}};
+    html += '<h3 style=\"font-size:14px;margin:16px 0 6px;color:' + colors[q] + '\">' + labels[q] + ' (' + items.length + '个)</h3>';
+    html += '<table style=\"width:100%;font-size:11px\"><tr style=\"background:#f8f9fa\"><th style=\"text-align:left;padding:4px 8px\">行业</th><th>RS</th><th>MO</th><th>趋势</th><th>连期</th><th>评估</th></tr>';
+    items.forEach(function(s) {{
+      var latest = getSectorLatest(s, snap);
+      var rs = latest[0].toFixed(0);
+      var mo = latest[1].toFixed(0);
+      var moSign = latest[1] >= 0 ? '+' : '';
+      var traj = getTrajUpto(s, snap);
+      var cd = consecDir(traj.map(function(p){{return p.value;}}).reverse());
+      var cdLabel = cd > 0 ? '↑' + cd : cd < 0 ? '↓' + Math.abs(cd) : '→';
+      var cdColor = cd > 0 ? '#d32f2f' : cd < 0 ? '#2E7D32' : '#999';
+      
+      var assess = '';
+      if (q === 'L') {{
+        if (cd < 0 && mo < 0) assess = '⚠ 减速预警';
+        else assess = cd > 0 ? '加速上涨' : '持有';
+      }} else if (q === 'I') {{
+        if (mo > 3 && cd > 0) assess = '★ 转强加速';
+        else if (cd < 0) assess = '等RS止跌';
+        else assess = '弱势改善';
+      }} else if (q === 'W') {{
+        assess = '高位松动，减仓';
+      }} else {{
+        if (cd < 0 && Math.abs(cd) >= 15) assess = '⚠ 连降长，回避';
+        else if (cd > 0 && mo < -5) assess = '假反弹';
+        else if (rs < -10) assess = '放弃关注';
+        else assess = '继续观望';
+      }}
+      
+      html += '<tr><td style=\"text-align:left;padding:4px 8px;font-weight:500\">' + s.name + '</td><td style=\"color:' + (latest[0]>=0?'#d32f2f':'#2E7D32') + '\">' + rs + '</td><td style=\"color:' + (latest[1]>=0?'#d32f2f':'#2E7D32') + '\">' + moSign + mo + '</td><td style=\"color:' + cdColor + '\">' + cdLabel + '</td><td>' + (cd > 0 ? cd*5 + '日' : cd < 0 ? Math.abs(cd)*5 + '日' : '') + '</td><td style=\"font-size:10px;color:#666\">' + assess + '</td></tr>';
+    }});
+    html += '</table>';
+  }});
+
+  // Window candidates
+  html += '<h3 style=\"font-size:14px;margin:20px 0 6px\">🎯 逆转窗口候选（连降10~25日，等MO转正）</h3>';
+  html += '<table style=\"width:100%;font-size:11px\"><tr style=\"background:#f8f9fa\"><th>行业</th><th>RS</th><th>MO</th><th>已跌</th><th>窗口位置</th></tr>';
+  var found = false;
+  sorted.forEach(function(s) {{
+    var latest = getSectorLatest(s, snap);
+    var traj = getTrajUpto(s, snap);
+    var cd = consecDir(traj.map(function(p){{return p.value;}}).reverse());
+    if (cd >= 0) return;
+    var downDays = Math.abs(cd) * 5;
+    if (downDays < 10 || downDays > 25) return;
+    found = true;
+    var pos = downDays >= 15 && downDays <= 24 ? '★ 最佳窗口' : '接近窗口';
+    html += '<tr' + (pos.indexOf('★')>=0?' style=\"background:#FFF8E1\"':'') + '><td>' + s.name + '</td><td>' + latest[0].toFixed(0) + '</td><td>' + (latest[1]>=0?'+':'') + latest[1].toFixed(0) + '</td><td>↓' + downDays + '日</td><td>' + pos + '</td></tr>';
+  }});
+  if (!found) html += '<tr><td colspan=\"5\" style=\"color:#888;padding:8px\">当前无窗口候选</td></tr>';
+  html += '</table>';
+
+  // Danger zone
+  var danger = sorted.filter(function(s) {{
+    var traj = getTrajUpto(s, snap);
+    var cd = consecDir(traj.map(function(p){{return p.value;}}).reverse());
+    return cd < 0 && Math.abs(cd) * 5 >= 35;
+  }});
+  if (danger.length) {{
+    html += '<h3 style=\"font-size:14px;margin:20px 0 6px;color:#d32f2f\">⚠ 警报区（连降35日+）</h3>';
+    html += '<table style=\"width:100%;font-size:11px\"><tr style=\"background:#f8f9fa\"><th>行业</th><th>RS</th><th>MO</th><th>已跌</th><th>建议</th></tr>';
+    danger.forEach(function(s) {{
+      var latest = getSectorLatest(s, snap);
+      var traj = getTrajUpto(s, snap);
+      var cd = consecDir(traj.map(function(p){{return p.value;}}).reverse());
+      html += '<tr style=\"background:#FFEBEE\"><td>' + s.name + '</td><td>' + latest[0].toFixed(0) + '</td><td>' + latest[1].toFixed(0) + '</td><td>↓' + (Math.abs(cd)*5) + '日</td><td style=\"font-size:10px\">勿抄底，等反弹减仓</td></tr>';
+    }});
+    html += '</table>';
+  }}
+
+  html += '<div style=\"margin-top:16px;font-size:10px;color:#aaa;text-align:center\">行业轮动 RRS 四象限图工具 · 自动生成</div>';
+  html += '</div>';
+  document.getElementById('analysisWrap').innerHTML = html;
+}}
+
 document.getElementById('stockTrendWrap').addEventListener('click', function(e) {{
   const btn = e.target.closest('[data-stock-sort]');
   if (btn) {{
@@ -634,6 +750,7 @@ function switchTab(tab) {{
   document.getElementById('tabChart').className = tab === 'chart' ? 'active' : '';
   document.getElementById('tabTrend').className = tab === 'trend' ? 'active' : '';
   document.getElementById('tabStockTrend').className = tab === 'stockTrend' ? 'active' : '';
+  document.getElementById('tabAnalysis').className = tab === 'analysis' ? 'active' : '';
   document.getElementById('chart').style.display = tab === 'chart' ? 'block' : 'none';
   document.querySelector('.controls').style.display = tab === 'chart' ? 'block' : 'none';
   document.querySelector('.snap-bar').style.display = 'flex';
@@ -641,8 +758,10 @@ function switchTab(tab) {{
   document.querySelector('.footer').style.display = tab === 'chart' ? 'block' : 'none';
   document.getElementById('trendTable').style.display = tab === 'trend' ? 'block' : 'none';
   document.getElementById('stockTrendTable').style.display = tab === 'stockTrend' ? 'block' : 'none';
+  document.getElementById('analysisPanel').style.display = tab === 'analysis' ? 'block' : 'none';
   if (tab === 'trend') buildTrendTable();
   if (tab === 'stockTrend') buildStockTrendTable();
+  if (tab === 'analysis') buildAnalysisReport();
   if (tab === 'chart') chart.resize();
 }}
 
@@ -952,6 +1071,7 @@ function onSnapCommit(el) {{
   setTimeout(function() {{ updateArrows(30); }}, 50);
   buildTrendTable();
   buildStockTrendTable();
+  buildAnalysisReport();
 }}
 function onCompareToggle() {{
   compareMode = document.getElementById('compareCheck').checked;
@@ -969,6 +1089,7 @@ function clearSnapshot() {{
   setTimeout(function() {{ updateArrows(30); }}, 50);
   buildTrendTable();
   buildStockTrendTable();
+  buildAnalysisReport();
 }}
 // init slider
 document.getElementById('snapSlider').max = snapshotDates.length - 1;
