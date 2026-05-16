@@ -416,6 +416,7 @@ function buildTrendTable() {{
 }}
 
 function buildStockTrendTable() {{
+  stockSectorFilter = document.getElementById('stockSectorFilter').value;
   const search = (document.getElementById('stockSearch').value || '').trim().toLowerCase();
   const entries = Object.entries(stockTrajData);
 
