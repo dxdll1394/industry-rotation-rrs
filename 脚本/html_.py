@@ -175,8 +175,8 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
                     if 0.3 <= retrace <= 0.7 and latest_val > vals[prev_up['start']] - 2:
                         phase = 'pre_main'
             mi = merged.index(main_wave); ci = merged.index(current)
-            if ci>mi+2 and current['type']=='up' and current['amplitude']<main_wave['amplitude']*0.6: phase = 'terminal'
-            if latest_val<0 and current['type']=='up' and current['amplitude']<8: phase = 'recovery'
+            if phase == 'post_main' and ci>mi+2 and current['type']=='up' and current['amplitude']<main_wave['amplitude']*0.6: phase = 'terminal'
+            if latest_val<0 and current['type']=='up' and current['amplitude']<8 and phase == 'post_main': phase = 'recovery'
 
             wave_data[sector] = {
                 'phase': phase,
