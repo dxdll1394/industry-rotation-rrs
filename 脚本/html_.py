@@ -68,6 +68,8 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
     hist_series_json = json.dumps(hist_series_list, ensure_ascii=False)
     hist_dates_json = json.dumps(hist_dates, ensure_ascii=False)
     stock_traj_json = json.dumps(stock_traj or {}, ensure_ascii=False)
+    snapshot_dates = sorted(set(p["date"] for sd in sectors_data for p in sd["trajectory"]))
+    snapshot_dates_json = json.dumps(snapshot_dates, ensure_ascii=False)
 
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -129,6 +131,12 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
   #stockTrendTable td {{ padding:2px 4px; border:1px solid #eee; text-align:center; font-size:10px; }}
   #stockTrendTable .st-name {{ text-align:left; font-weight:500; position:sticky; left:0; background:#fff; z-index:1; }}
   #stockTrendTable .st-code {{ color:#999; font-weight:400; }}
+  .snap-bar {{ text-align:center; margin:6px 0; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; }}
+  .snap-bar label {{ font-size:11px; color:#888; cursor:pointer; }}
+  .snap-bar input[type="range"] {{ width:160px; vertical-align:middle; }}
+  .snap-date {{ font-size:12px; font-weight:bold; color:#1a1a2e; min-width:80px; display:inline-block; text-align:center; }}
+  .snap-bar .snap-btn {{ background:#1a1a2e; color:#fff; border:none; padding:2px 8px; border-radius:3px; cursor:pointer; font-size:10px; }}
+  .snap-bar .snap-btn:hover {{ background:#e94560; }}
 </style>
 </head>
 <body>
@@ -160,6 +168,13 @@ def gen_html(trajectories, update_date, pool=None, stock_rs=None, stock_traj=Non
       <span class="date-marker" style="background:#999;width:12px;height:12px;"></span>{hist_dates[2][5:]}
       <span class="date-marker" style="background:#222;width:14px;height:14px;"></span>当前
     </span>
+  </div>
+  <div class="snap-bar">
+    <span style="font-size:11px;color:#888">⏱ 快照</span>
+    <input type="range" id="snapSlider" min="0" max="0" value="0" step="1" oninput="onSnapSlide(this)">
+    <span class="snap-date" id="snapDateLabel">关闭</span>
+    <label><input type="checkbox" id="compareCheck" onchange="onCompareToggle()"> 对比当前</label>
+    <button class="snap-btn" onclick="clearSnapshot()">✕ 重置</button>
   </div>
   <div class="legend">
     <span class="legend-item">[L] Leading 强势</span>
@@ -198,6 +213,7 @@ const sectorsData = {sectors_json};
 const histSeries = {hist_series_json};
 const HIST_DATES = {hist_dates_json};
 const stockTrajData = {stock_traj_json};
+const snapshotDates = {snapshot_dates_json};
 
 const quads = {{'L':'Leading','I':'Improving','W':'Weakening','G':'Lagging'}};
 
@@ -232,6 +248,8 @@ let trendSortCol = -1, trendSortDir = 1;
 let expandedSectors = new Set();
 let stockTrendSortCol = -1, stockTrendSortDir = -1;
 let stockQuadFilter = '';
+let snapshotDate = null;
+let compareMode = false;
 
 document.getElementById('trendWrap').addEventListener('click', function(e) {{
   const btn = e.target.closest('.exp-btn');
@@ -406,7 +424,7 @@ let isolatedSector = null;
 
 function isolate(sector) {{
   isolatedSector = sector;
-  chart.setOption(buildOption(showLines, sector), true);
+  chart.setOption(buildOption(showLines, sector, snapshotDate), true);
   setTimeout(() => updateArrows(sector ? 1 : 30), 50);
 }}
 
@@ -429,41 +447,61 @@ function updateArrows(n) {{
   chart.setOption({{ series: allSeries }});
 }}
 
-function buildOption(showLines, filterSector) {{
+function getSnapPos(s, date) {{
+  const p = s.trajectory.find(q => q.date === date);
+  return p ? p.value : null;
+}}
+function getSnapQuad(s, date) {{
+  const pos = getSnapPos(s, date);
+  return pos ? getQuad(pos[0], pos[1]) : s.quad;
+}}
+function getQuadColor(q) {{
+  return {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}}[q] || '#333';
+}}
+
+function buildOption(showLines, filterSector, snapDate) {{
+  const hasSnap = snapDate != null;
   const active = filterSector
     ? sectorsData.filter(s => s.name === filterSector)
     : sectorsData;
 
-  const lineSeries = active.map(s => ({{
-    name: s.name,
-    type: 'line',
-    data: s.trajectory,
-    smooth: false,
-    symbol: 'none',
-    lineStyle: {{ color: s.color, width: 2, opacity: 0.45 }},
-    emphasis: {{ lineStyle: {{ width: 4, opacity: 0.95 }} }},
-    markLine: {{ data: [] }},
-    z: 1,
-  }}));
+  const lineSeries = active.map(s => {{
+    let traj = s.trajectory;
+    if (hasSnap) traj = traj.filter(p => p.date <= snapDate);
+    return {{
+      name: s.name,
+      type: 'line',
+      data: traj,
+      smooth: false,
+      lineStyle: {{ color: s.color, width: 2, opacity: 0.45 }},
+      emphasis: {{ lineStyle: {{ width: 4, opacity: 0.95 }} }},
+      markLine: {{ data: [] }},
+      z: 1,
+    }};
+  }});
 
-  // 轨迹节点散点（不可见，用于点击 + 日期标签锚点）
-  const scatterOnLine = active.map(s => ({{
-    name: s.name,
-    type: 'scatter',
-    data: s.trajectory,
-    symbol: 'circle', symbolSize: 1,
-    tooltip: {{ show: false }},
-    label: {{
-      show: filterSector != null,
-      formatter: p => p.data.date.slice(5).replace('-', '/'),
-      fontSize: 8, color: '#666', position: 'top',
-    }},
-    z: 2,
-  }}));
+  const scatterOnLine = active.map(s => {{
+    let traj = s.trajectory;
+    if (hasSnap) traj = traj.filter(p => p.date <= snapDate);
+    return {{
+      name: s.name,
+      type: 'scatter',
+      data: traj,
+      symbol: 'circle', symbolSize: 1,
+      tooltip: {{ show: false }},
+      label: {{
+        show: filterSector != null,
+        formatter: p => p.data.date.slice(5).replace('-', '/'),
+        fontSize: 8, color: '#666', position: 'top',
+      }},
+      z: 2,
+    }};
+  }});
 
   const markerSeries = active.map(s => {{
     const pts = [];
     histSeries.forEach((hs, idx) => {{
+      if (hasSnap && hs.date > snapDate) return;
       const item = hs.items.find(i => i.name === s.name);
       if (!item) return;
       pts.push({{
@@ -474,13 +512,28 @@ function buildOption(showLines, filterSector) {{
         itemStyle: {{ color: s.color }},
       }});
     }});
+    let lx = s.latest[0], ly = s.latest[1];
+    let ld = s.latestDate;
+    if (hasSnap) {{
+      const snap = getSnapPos(s, snapDate);
+      if (snap) {{ lx = snap[0]; ly = snap[1]; ld = snapDate.slice(5); }}
+    }}
     pts.push({{
-      name: s.name, value: [...s.latest, s.stockCount],
+      name: s.name, value: [lx, ly, s.stockCount],
       symbol: 'circle', symbolSize: 14,
-      label: {{ show: true, formatter: s.name + ' (' + s.latestDate + ')', fontSize: 11, fontWeight: 'bold', position: 'right' }},
+      label: {{ show: true, formatter: s.name + ' (' + ld + ')', fontSize: 11, fontWeight: 'bold', position: 'right' }},
       itemStyle: {{ color: s.color, opacity: 0.9, borderColor: '#fff', borderWidth: 1.5 }},
       emphasis: {{ scale: 1.5 }},
     }});
+    if (compareMode && hasSnap) {{
+      pts.push({{
+        name: s.name, value: [...s.latest, s.stockCount],
+        symbol: 'circle', symbolSize: 7,
+        itemStyle: {{ color: '#fff', borderColor: s.color, borderWidth: 2, opacity: 0.6 }},
+        label: {{ show: false }},
+        emphasis: {{ scale: 1.5 }},
+      }});
+    }}
     return {{ name: s.name, type: 'scatter', data: pts, z: 5 }};
   }});
 
@@ -497,8 +550,49 @@ function buildOption(showLines, filterSector) {{
         const q = getQuad(x, y);
         const name = p.name || p.seriesName || '';
         const suffix = extra != null && typeof extra === 'number' ? ` | 成分股: ${{extra}}只` : '';
-        return `<strong>${{name}}</strong><br/>RS: ${{x.toFixed(1)}} | MO: ${{y.toFixed(1)}}<br/>象限: ${{quads[q]}}${{suffix}}`;
+        const tag = hasSnap ? ` 📷${{snapDate.slice(5)}}` : '';
+        return `<strong>${{name}}</strong><br/>RS: ${{x.toFixed(1)}} | MO: ${{y.toFixed(1)}}<br/>象限: ${{quads[q]}}${{suffix}}${{tag}}`;
       }}
+    }},
+    legend: {{
+      show: true, bottom: 0, icon: 'circle', itemWidth: 8, itemHeight: 8,
+      textStyle: {{fontSize: 11}},
+      formatter: name => {{
+        const s = sectorsData.find(d => d.name === name);
+        if (!s) return name;
+        const q = hasSnap ? getSnapQuad(s, snapDate) : s.quad;
+        const idx = {{L:0,I:1,W:2,G:3}}[q];
+        const tag = hasSnap ? '📷' : '';
+        return (['[L] ','[I] ','[W] ','[G] '][idx != null ? idx : 3]) + tag + name;
+      }},
+      data: [...sectorsData].sort((a, b) => {{
+        const q = {{L:0, I:1, W:2, G:3}};
+        const qa = hasSnap ? getSnapQuad(a, snapDate) : a.quad;
+        const qb = hasSnap ? getSnapQuad(b, snapDate) : b.quad;
+        return (q[qa]||9) - (q[qb]||9) || a.name.localeCompare(b.name);
+      }}).map(s => ({{
+        name: s.name,
+        textStyle: {{ color: getQuadColor(hasSnap ? getSnapQuad(s, snapDate) : s.quad) }},
+      }})),
+    }},
+    xAxis: {{
+      name: 'RS Ratio -> 相对大盘走强', nameLocation: 'center', nameGap: 35,
+      splitLine: {{show: true, lineStyle: {{type: 'dashed', color: '#ddd'}}}},
+      axisLine: {{show: true}},
+      min: -xLimit, max: xLimit,
+    }},
+    yAxis: {{
+      name: 'RS Momentum -> 动量向上', nameLocation: 'center', nameGap: 40,
+      splitLine: {{show: true, lineStyle: {{type: 'dashed', color: '#ddd'}}}},
+      axisLine: {{show: true}},
+      min: -yLimit, max: yLimit,
+    }},
+    series: series,
+    dataZoom: [{{ type: 'inside', xAxisIndex: [0], yAxisIndex: [0], zoomSensitivity: 0.12 }}],
+    toolbox: {{ feature: {{ dataZoom: {{ xAxisIndex: [0], yAxisIndex: [0] }}, restore: {{}} }}, right: 20, top: 10 }},
+    grid: {{ top: 40, bottom: 60, left: 65, right: 40 }},
+  }};
+}}
     }},
     legend: {{
       show: true, bottom: 0, icon: 'circle', itemWidth: 8, itemHeight: 8,
@@ -537,7 +631,7 @@ function buildOption(showLines, filterSector) {{
 
 function toggleLines() {{
   showLines = !showLines;
-  chart.setOption(buildOption(showLines, null), true);
+  chart.setOption(buildOption(showLines, null, snapshotDate), true);
 }}
 
 function hideAll() {{
@@ -550,7 +644,7 @@ function filterQuad(q) {{
   setTimeout(() => updateArrows(sectorsData.filter(s => s.quad === q).length), 50);
 }}
 
-chart.setOption(buildOption(true, null));
+chart.setOption(buildOption(true, null, null));
 setTimeout(() => updateArrows(30), 100);
 
 function resolveSector(params) {{
@@ -597,6 +691,33 @@ function zoomChart(factor) {{
   const half = ((e - s) * factor) / 2;
   chart.dispatchAction({{ type: 'dataZoom', start: Math.max(0, c - half), end: Math.min(100, c + half) }});
 }}
+
+// snapshot
+function onSnapSlide(el) {{
+  const idx = parseInt(el.value);
+  snapshotDate = idx === 0 ? null : snapshotDates[idx];
+  const label = document.getElementById('snapDateLabel');
+  label.textContent = snapshotDate ? snapshotDate.slice(5).replace('-', '/') : '关闭';
+  label.style.color = snapshotDate ? '#e94560' : '#1a1a2e';
+  chart.setOption(buildOption(showLines, isolatedSector, snapshotDate), true);
+  setTimeout(() => updateArrows(30), 50);
+}}
+function onCompareToggle() {{
+  compareMode = document.getElementById('compareCheck').checked;
+  if (snapshotDate) chart.setOption(buildOption(showLines, isolatedSector, snapshotDate), true);
+}}
+function clearSnapshot() {{
+  snapshotDate = null;
+  compareMode = false;
+  document.getElementById('snapSlider').value = 0;
+  document.getElementById('snapDateLabel').textContent = '关闭';
+  document.getElementById('snapDateLabel').style.color = '#1a1a2e';
+  document.getElementById('compareCheck').checked = false;
+  chart.setOption(buildOption(showLines, isolatedSector, null), true);
+  setTimeout(() => updateArrows(30), 50);
+}}
+// init slider
+document.getElementById('snapSlider').max = snapshotDates.length - 1;
 
 let clickBusy = false;
 
