@@ -248,17 +248,35 @@ const markArea = {{
   ]
 }};
 
-let trendSortCol = -1, trendSortDir = 1;
+let trendSortCol = -1, trendSortDir = 1, trendSortMode = null;
 let expandedSectors = new Set();
-let stockTrendSortCol = -1, stockTrendSortDir = -1;
+let stockTrendSortCol = -1, stockTrendSortDir = -1, stockTrendSortMode = null;
 let stockQuadFilter = '';
 let snapshotDate = null;
 let compareMode = false;
 
+function setTrendSort(mode) {{
+  if (trendSortMode === mode) {{ trendSortDir *= -1; }}
+  else {{ trendSortMode = mode; trendSortDir = 1; trendSortCol = -1; }}
+  buildTrendTable();
+}}
+
 document.getElementById('trendWrap').addEventListener('click', function(e) {{
-  const btn = e.target.closest('.exp-btn');
-  if (!btn) return;
-  const sector = btn.dataset.sector;
+  const btn = e.target.closest('[data-trend-sort]');
+  if (btn) {{ setTrendSort(btn.dataset.trendSort); return; }}
+  const dateBtn = e.target.closest('[data-trend-date]');
+  if (dateBtn) {{
+    const di = parseInt(dateBtn.dataset.trendDate);
+    const active = di === trendSortCol && trendSortMode === 'date';
+    trendSortCol = di;
+    trendSortMode = 'date';
+    trendSortDir = active && trendSortDir > 0 ? -1 : 1;
+    buildTrendTable();
+    return;
+  }}
+  const exp = e.target.closest('.exp-btn');
+  if (!exp) return;
+  const sector = exp.dataset.sector;
   if (expandedSectors.has(sector)) expandedSectors.delete(sector);
   else expandedSectors.add(sector);
   buildTrendTable();
@@ -267,29 +285,58 @@ document.getElementById('trendWrap').addEventListener('click', function(e) {{
 const QC = {{L:'#1565C0',I:'#2E7D32',W:'#E65100',G:'#999'}};
 const QN = {{L:'Leading',I:'Improving',W:'Weakening',G:'Lagging'}};
 
+function setTrendSort(mode) {{
+  if (trendSortMode === mode) {{ trendSortDir *= -1; }}
+  else {{ trendSortMode = mode; trendSortDir = 1; trendSortCol = -1; }}
+  buildTrendTable();
+}}
+
 function buildTrendTable() {{
   const dates = [...new Set(sectorsData.flatMap(s => s.trajectory.map(p => p.date)))].sort().reverse();
   const sorted = [...sectorsData];
-  if (trendSortCol >= 0) {{
+  const qOrd = {{L:0, I:1, W:2, G:3}};
+
+  if (trendSortMode === 'name') {{
+    sorted.sort((a, b) => a.name.localeCompare(b.name) * trendSortDir);
+  }} else if (trendSortMode === 'rs') {{
+    sorted.sort((a, b) => (a.latest[0] - b.latest[0]) * trendSortDir);
+  }} else if (trendSortMode === 'mo') {{
+    sorted.sort((a, b) => (a.latest[1] - b.latest[1]) * trendSortDir);
+  }} else if (trendSortMode === 'quad') {{
+    sorted.sort((a, b) => ((qOrd[a.quad]||9) - (qOrd[b.quad]||9)) * trendSortDir || a.name.localeCompare(b.name));
+  }} else if (trendSortMode === 'count') {{
+    sorted.sort((a, b) => (a.stockCount - b.stockCount) * trendSortDir);
+  }} else if (trendSortMode === 'date' && trendSortCol >= 0) {{
     const col = trendSortCol;
     sorted.sort((a, b) => {{
       const va = a.trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
       const vb = b.trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
       return (vb - va) * trendSortDir;
     }});
+  }} else {{
+    sorted.sort((a, b) => b.latest[0] - a.latest[0]);
   }}
+
   const nCols = dates.length + 1;
-  let html = '<div style="margin-bottom:6px;font-size:10px;color:#888">';
-  html += '<span style="margin-right:10px"><span class="color-sq" style="background:#1565C0"></span><b style="color:#1565C0">L</b> Leading</span>';
+  let html = '<div style="margin-bottom:6px;font-size:10px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">';
+  html += '<span style="color:#888;margin-right:4px">排序:</span>';
+  const sorts = [['name','名称'],['rs','最新RS'],['mo','最新MO'],['quad','象限'],['count','数量']];
+  sorts.forEach(([k, label]) => {{
+    const active = trendSortMode === k;
+    const arrow = active ? (trendSortDir > 0 ? '▲' : '▼') : '';
+    html += '<span data-trend-sort="' + k + '" style="cursor:pointer;padding:1px 6px;border-radius:3px;background:' + (active ? '#1a1a2e' : '#e0e0e0') + ';color:' + (active ? '#fff' : '#333') + '">' + label + ' ' + arrow + '</span>';
+  }});
+  html += '<span style="margin-left:8px">';
+  html += '<span class="color-sq" style="background:#1565C0"></span><b style="color:#1565C0">L</b> Leading</span>';
   html += '<span style="margin-right:10px"><span class="color-sq" style="background:#2E7D32"></span><b style="color:#2E7D32">I</b> Improving</span>';
   html += '<span style="margin-right:10px"><span class="color-sq" style="background:#E65100"></span><b style="color:#E65100">W</b> Weakening</span>';
   html += '<span><span class="color-sq" style="background:#999"></span><b style="color:#999">G</b> Lagging</span>';
   html += '</div>';
   html += '<table><thead><tr><th class="sector-name">行业</th>';
   dates.forEach((d, di) => {{
-    const active = di === trendSortCol;
+    const active = di === trendSortCol && trendSortMode === 'date';
     const arrow = active ? (trendSortDir > 0 ? ' ▲' : ' ▼') : '';
-    html += '<th onclick="trendSortCol=' + di + ';trendSortDir=' + (active && trendSortDir > 0 ? -1 : 1) + ';buildTrendTable()" style="cursor:pointer">' + d.slice(5).replace('-','/') + '<br><span style="font-weight:400;font-size:9px">RS / MO' + arrow + '</span></th>';
+    html += '<th data-trend-date="' + di + '" style="cursor:pointer">' + d.slice(5).replace('-','/') + '<br><span style="font-weight:400;font-size:9px">RS/MO' + arrow + '</span></th>';
   }});
   html += '</tr></thead><tbody>';
   sorted.forEach(s => {{
@@ -348,7 +395,20 @@ function buildStockTrendTable() {{
     return true;
   }});
 
-  if (stockTrendSortCol >= 0) {{
+  const qOrd = {{L:0, I:1, W:2, G:3}};
+  if (stockTrendSortMode === 'name') {{
+    filtered.sort((a, b) => a[1].name.localeCompare(b[1].name) * stockTrendSortDir);
+  }} else if (stockTrendSortMode === 'code') {{
+    filtered.sort((a, b) => a[0].localeCompare(b[0]) * stockTrendSortDir);
+  }} else if (stockTrendSortMode === 'sector') {{
+    filtered.sort((a, b) => a[1].sector.localeCompare(b[1].sector) * stockTrendSortDir || a[1].name.localeCompare(b[1].name));
+  }} else if (stockTrendSortMode === 'rs') {{
+    filtered.sort((a, b) => (a[1].latest[0] - b[1].latest[0]) * stockTrendSortDir);
+  }} else if (stockTrendSortMode === 'mo') {{
+    filtered.sort((a, b) => (a[1].latest[1] - b[1].latest[1]) * stockTrendSortDir);
+  }} else if (stockTrendSortMode === 'quad') {{
+    filtered.sort((a, b) => ((qOrd[a[1].quad]||9) - (qOrd[b[1].quad]||9)) * stockTrendSortDir || a[1].name.localeCompare(b[1].name));
+  }} else if (stockTrendSortMode === 'date' && stockTrendSortCol >= 0) {{
     const col = stockTrendSortCol;
     filtered.sort((a, b) => {{
       const va = a[1].trajectory.find(p => p.date === dates[col])?.value[0] ?? -999;
@@ -356,7 +416,6 @@ function buildStockTrendTable() {{
       return (va - vb) * stockTrendSortDir;
     }});
   }} else {{
-    // default sort by latest RS ratio desc
     filtered.sort((a, b) => b[1].latest[0] - a[1].latest[0]);
   }}
 
@@ -365,19 +424,22 @@ function buildStockTrendTable() {{
 
   const nCols = dates.length + 1;
   let html = '';
-  html += '<div style="margin-bottom:4px;font-size:10px;color:#888">';
-  html += '<span style="margin-right:10px"><span class="color-sq" style="background:#1565C0"></span><b style="color:#1565C0">L</b> Leading</span>';
-  html += '<span style="margin-right:10px"><span class="color-sq" style="background:#2E7D32"></span><b style="color:#2E7D32">I</b> Improving</span>';
-  html += '<span style="margin-right:10px"><span class="color-sq" style="background:#E65100"></span><b style="color:#E65100">W</b> Weakening</span>';
-  html += '<span><span class="color-sq" style="background:#999"></span><b style="color:#999">G</b> Lagging</span>';
+  html += '<div style="margin-bottom:4px;font-size:10px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">';
+  html += '<span style="color:#888;margin-right:4px">排序:</span>';
+  const sorts = [['name','名称'],['code','代码'],['sector','行业'],['rs','最新RS'],['mo','最新MO'],['quad','象限']];
+  sorts.forEach(([k, label]) => {{
+    const active = stockTrendSortMode === k;
+    const arrow = active ? (stockTrendSortDir > 0 ? '▲' : '▼') : '';
+    html += '<span data-stock-sort="' + k + '" style="cursor:pointer;padding:1px 6px;border-radius:3px;background:' + (active ? '#1a1a2e' : '#e0e0e0') + ';color:' + (active ? '#fff' : '#333') + '">' + label + ' ' + arrow + '</span>';
+  }});
   html += '</div>';
   html += '<table><thead><tr><th class="st-name" style="min-width:60px">名称 <span style="font-weight:400;font-size:9px;color:#999">代码</span></th><th style="min-width:40px">行业</th>';
 
-  const active = stockTrendSortCol;
+  const dateActive = stockTrendSortMode === 'date';
   dates.forEach((d, di) => {{
-    const a = di === active;
-    const arrow = a ? (stockTrendSortDir > 0 ? ' ▲' : ' ▼') : '';
-    html += '<th onclick="stockTrendSortCol=' + di + ';stockTrendSortDir=' + (a && stockTrendSortDir > 0 ? -1 : 1) + ';buildStockTrendTable()" style="cursor:pointer">' + d.slice(5).replace('-','/') + '<br><span style="font-weight:400;font-size:9px">RS/MO' + arrow + '</span></th>';
+    const a = di === stockTrendSortCol && dateActive;
+    const arrow = a ? (stockTrendSortDir > 0 ? '▲' : '▼') : '';
+    html += '<th data-stock-date="' + di + '" style="cursor:pointer">' + d.slice(5).replace('-','/') + '<br><span style="font-weight:400;font-size:9px">RS/MO' + arrow + '</span></th>';
   }});
 
   html += '</tr></thead><tbody>';
@@ -408,12 +470,33 @@ function buildStockTrendTable() {{
   document.getElementById('stockTrendWrap').innerHTML = html;
 }}
 
+document.getElementById('stockTrendWrap').addEventListener('click', function(e) {{
+  const btn = e.target.closest('[data-stock-sort]');
+  if (btn) {{
+    const mode = btn.dataset.stockSort;
+    if (stockTrendSortMode === mode) {{ stockTrendSortDir *= -1; }}
+    else {{ stockTrendSortMode = mode; stockTrendSortDir = 1; stockTrendSortCol = -1; }}
+    buildStockTrendTable();
+    return;
+  }}
+  const dateBtn = e.target.closest('[data-stock-date]');
+  if (dateBtn) {{
+    const di = parseInt(dateBtn.dataset.stockDate);
+    const active = di === stockTrendSortCol && stockTrendSortMode === 'date';
+    stockTrendSortCol = di;
+    stockTrendSortMode = 'date';
+    stockTrendSortDir = active && stockTrendSortDir > 0 ? -1 : 1;
+    buildStockTrendTable();
+  }}
+}});
+
 function switchTab(tab) {{
   document.getElementById('tabChart').className = tab === 'chart' ? 'active' : '';
   document.getElementById('tabTrend').className = tab === 'trend' ? 'active' : '';
   document.getElementById('tabStockTrend').className = tab === 'stockTrend' ? 'active' : '';
   document.getElementById('chart').style.display = tab === 'chart' ? 'block' : 'none';
   document.querySelector('.controls').style.display = tab === 'chart' ? 'block' : 'none';
+  document.querySelector('.snap-bar').style.display = tab === 'chart' ? 'flex' : 'none';
   document.querySelector('.legend').style.display = tab === 'chart' ? 'flex' : 'none';
   document.querySelector('.footer').style.display = tab === 'chart' ? 'block' : 'none';
   document.getElementById('trendTable').style.display = tab === 'trend' ? 'block' : 'none';
