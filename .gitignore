@@ -5,3 +5,8 @@
 *.parquet
 .DS_Store
 session-*.md
+
+# 缓存数据
+数据/收盘价缓存/
+数据/.last_update
+*.parquet
