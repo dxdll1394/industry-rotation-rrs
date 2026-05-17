@@ -874,6 +874,26 @@ function buildAnalysisReport() {{
   }}
   html += '</div></div>';
 
+  // ===== METHODOLOGY (collapsible) =====
+  html += '<div style=\"background:#f8f9fa;border-radius:8px;padding:12px 16px;margin-top:12px;font-size:10px;color:#555;line-height:1.8\">';
+  html += '<div onclick=\"var el=document.getElementById(\\'methodSec\\');var arrow=document.getElementById(\\'methodArrow\\');el.style.display=el.style.display===\\'none\\'?\\'block\\':\\'none\\';arrow.textContent=el.style.display===\\'none\\'?\\'▸\\':\\'▾\\'\" style=\"cursor:pointer;font-weight:bold;font-size:11px\"><span id=\"methodArrow\">▸</span> 📖 分析方法说明</div>';
+  html += '<div id=\"methodSec\" style=\"display:none;margin-top:8px\">';
+  html += '<b>RS（Relative Strength）</b> — 行业等权篮子相对于上证指数的强弱。计算：(行业均价/上证指数)偏离其63日均线的百分比。正值=跑赢大盘，负值=跑输。<br>';
+  html += '<b>MO（Momentum）</b> — RS的21日动量。计算：RS[今日] − RS[21天前]。正值=RS在加速上升，负值=RS在减速/下降。MO正+RS负=I象限（弱势改善），MO负+RS正=W象限（高位松动）。<br>';
+  html += '<b>↑↓标记</b> — RS连续同向变化的期数，每期5个交易日。↑5=RS连升25天，↓3=RS连降15天。<br>';
+  html += '<b>逆转窗口</b> — 统计结论：连降15~24个交易日（↓3~↓5）时逆转率最高（~16%），超过75日零逆转。<br>';
+  html += '<br><b>波浪分析算法：</b><br>';
+  html += '① 趋势分段 — 从RS轨迹识别连续同向运动，最小2期（10天）形成一段。<br>';
+  html += '② 连段合并 — 同向连续段合并为一个趋势，消除分段碎片。<br>';
+  html += '③ 小波合并 — 逆势波振幅<周围主波×33%时合并，消除噪声。<br>';
+  html += '④ 主浪评分 — 上升浪按 <code>振幅 × √交易天数</code> 评分，最高分为历史最强主升浪。<br>';
+  html += '⑤ 位置分类 — main_advance(评分≥主浪80%) / strong_advance(振幅≥8,斜率≥1.5,RS>0) / pre_main(下跌中,回撤30-70%,未破支撑) / terminal(主升后力度递减)。<br>';
+  html += '<br><b>pre_main 布局条件（4条）：</b><br>';
+  html += '1. 当前处于下降浪 · 2. 前升浪振幅≥5 · 3. RS回撤率30%~70%（不浅不深） · 4. RS未跌破前升浪起点-2（支撑还在）<br>';
+  html += '回撤率 = (前升浪RS峰 − 当前RS) ÷ 前升浪RS振幅。RS回撤≠股价回撤，衡量的是行业跑赢大盘的优势收窄程度。<br>';
+  html += '<span style=\"color:#999\">回测验证：pre_main信号后92%概率出现>8RS点的大浪。基于32行业672次滚动信号。</span>';
+  html += '</div></div>';
+
   html += '<div style=\"margin-top:10px;font-size:9px;color:#bbb;text-align:center\">行业轮动 RRS 四象限图 · 自动生成</div>';
   html += '</div>';
   document.getElementById('analysisWrap').innerHTML = html;
