@@ -12,13 +12,42 @@
   python3 行业轮动RRS.py --cron     # 定时模式（仅周六更新）
 """
 import sys
+from pathlib import Path
 from datetime import datetime, date
 
-from config import DATA_DIR, TRAJECTORY_INTERVAL
-from data import load_pool, load_market_data, fetch_all_close_data
+from config import DATA_DIR, TRAJECTORY_INTERVAL, MARKET_DB
+from data import load_pool, load_market_data, fetch_all_close_data, fetch_etf_close_data
 from calc import calc_sector_rrs, calc_stock_rs_data, calc_stock_trajectory_data, get_trajectory, get_quad
 from png import plot_rrg
 from html_ import gen_html
+
+
+INDEX_UPDATER = Path(__file__).resolve().parent.parent.parent / "数据工具" / "更新指数数据.py"
+
+def _update_market_index():
+    import sqlite3
+    conn = sqlite3.connect(str(MARKET_DB))
+    row = conn.execute(
+        "SELECT date FROM index_daily WHERE symbol='sh000001' ORDER BY date DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+    if row:
+        last_date = datetime.strptime(row[0], "%Y-%m-%d").date()
+        if last_date >= date.today():
+            print(f"  指数数据已最新({last_date})，跳过更新", file=sys.stderr)
+            return
+
+    print(f"  更新指数数据...", file=sys.stderr)
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, str(INDEX_UPDATER)],
+        capture_output=True, text=True
+    )
+    for line in result.stdout.strip().split("\n"):
+        if line:
+            print(f"    {line}", file=sys.stderr)
+    if result.returncode != 0:
+        print(f"  指数更新失败: {result.stderr.strip()}", file=sys.stderr)
 
 
 def main():
@@ -52,11 +81,13 @@ def main():
     print(f"  行业数: {len(pool)}", file=sys.stderr)
     print(f"  股票数: {sum(len(v) for v in pool.values())}", file=sys.stderr)
 
+    _update_market_index()
     market = load_market_data()
-    print(f"  上证指数: {len(market)}天", file=sys.stderr)
+    market_last = market.index.max().date()
+    print(f"  上证指数: {len(market)}天, 最新: {market_last}", file=sys.stderr)
 
     print(f"  获取数据{'缓存' if use_cache else '强制刷新'}...", file=sys.stderr)
-    stock_data, _ = fetch_all_close_data(force=force)
+    stock_data, _ = fetch_all_close_data(force=force, latest_market_date=market_last)
     print(f"  已加载: {len(stock_data)}只", file=sys.stderr)
 
     trajectories = calc_sector_rrs(stock_data, market, pool)
@@ -78,6 +109,8 @@ def main():
     update_date = datetime.now().strftime("%Y-%m-%d")
     plot_rrg(trajectories, update_date)
     if make_html:
+        print(f"  更新ETF数据...", file=sys.stderr)
+        fetch_etf_close_data(force=force, latest_market_date=market_last)
         stock_rs = calc_stock_rs_data(stock_data, market, pool)
         stock_traj = calc_stock_trajectory_data(stock_data, market, pool)
         gen_html(trajectories, update_date, pool=pool, stock_rs=stock_rs, stock_traj=stock_traj)
